@@ -1,0 +1,955 @@
+audio:
+  max_download_seconds: 1200
+  min_seconds: 6
+  raw_dir: data/raw_audio
+db_url: sqlite:///data/queue.db
+# Metadata-based weak labels. If empty, 03b uses platforms config as trusted Lebanese.
+# Add trusted_non_lebanese for negative examples (e.g. Lebanon TN, Egyptian channels).
+weak_labels:
+  trusted_lebanese_channels: []
+  trusted_lebanese_feeds: []
+  trusted_lebanese_tiktok_users: []
+  trusted_non_lebanese_channels: []
+  trusted_non_lebanese_feeds: []
+  trusted_non_lebanese_tiktok_users: []
+platforms:
+  # DISABLED: Facebook not in use. Keep files (01f, tools, src) for future.
+  # To re-enable: uncomment pages below and run scripts/01f_discover_facebook.py
+  facebook:
+    pages: []  # was: aljadeedonline, lbci, mtvlebanon, ...
+  # DISABLED: Instagram not in use. Keep files (01e, tools, src) for future.
+  # To re-enable: add users below and run scripts/01e_discover_instagram.py
+  instagram:
+    users: []  # was: lebanesecontent, lebanesevoice, lebanontalks
+  podcasts:
+    keywords:
+    - لبنان
+    - Lebanon
+    - بيروت
+    - Beirut
+    - لبناني
+    - Lebanese
+    - بودكاست لبناني
+    - بودكاست
+    - podcast lebanon
+    - lebanese podcast
+    - podcast libanais
+    - podcast liban
+    - لهجة لبنانية
+    - Lebanese dialect
+    - اللهجة اللبنانية
+    - العربية اللبنانية
+    - lebanese arabic
+    - حوار لبناني
+    - مقابلة لبنانية
+    - Lebanese interview
+    - حوار مع لبناني
+    - مقابلة مع لبناني
+    - Lebanese conversation
+    - Lebanese talk show
+    - سياسة لبنان
+    - Lebanese politics
+    - اخبار لبنان
+    - أخبار لبنان
+    - Lebanon news
+    - Lebanese news
+    - أخبار بيروت
+    - اخبار بيروت
+    - سياسة لبنانية
+    - Lebanese politics
+    - أحداث لبنان
+    - Lebanese events
+    - وضع لبنان
+    - Lebanon situation
+    - ثقافة لبنانية
+    - Lebanese culture
+    - مجتمع لبناني
+    - Lebanese society
+    - تراث لبناني
+    - Lebanese heritage
+    - تاريخ لبنان
+    - Lebanese history
+    - فن لبناني
+    - Lebanese art
+    - موسيقى لبنانية
+    - Lebanese music
+    - مطرب لبناني
+    - Lebanese singer
+    - فنان لبناني
+    - Lebanese artist
+    - دراما لبنانية
+    - Lebanese drama
+    - كوميديا لبنانية
+    - Lebanese comedy
+    - رياضة لبنان
+    - Lebanese sports
+    - كرة سلة لبنان
+    - Lebanese basketball
+    - فريق لبنان
+    - Lebanon team
+    - مباراة لبنان
+    - Lebanon match
+    - اقتصاد لبنان
+    - Lebanese economy
+    - أعمال لبنان
+    - Lebanese business
+    - تجارة لبنان
+    - Lebanese trade
+    - مطبخ لبناني
+    - Lebanese cuisine
+    - أكل لبناني
+    - Lebanese food
+    - طبخ لبناني
+    - Lebanese cooking
+    - سياحة لبنان
+    - Lebanese tourism
+    - جمال لبنان
+    - Lebanon beauty
+    - أماكن لبنان
+    - Lebanon places
+    - تعليم لبنان
+    - Lebanese education
+    - جامعة لبنان
+    - Lebanon university
+    - طلاب لبنان
+    - Lebanese students
+    - شباب لبنان
+    - Lebanese youth
+    - نساء لبنان
+    - Lebanese women
+    - عائلة لبنانية
+    - Lebanese family
+    - حياة لبنانية
+    - Lebanese life
+    - إعلام لبنان
+    - Lebanese media
+    - صحافة لبنانية
+    - Lebanese journalism
+    - صحفي لبناني
+    - Lebanese journalist
+    - دين لبنان
+    - Lebanon religion
+    - طائفة لبنانية
+    - Lebanese sect
+    - مجتمع لبناني
+    - Lebanese community
+    - تكنولوجيا لبنان
+    - Lebanese technology
+    - ابتكار لبناني
+    - Lebanese innovation
+    - شركات لبنان
+    - Lebanese companies
+    - صحة لبنان
+    - Lebanese health
+    - طب لبنان
+    - Lebanese medicine
+    - أدب لبناني
+    - Lebanese literature
+    - كتاب لبناني
+    - Lebanese writer
+    - رواية لبنانية
+    - Lebanese novel
+    - أزمة لبنان
+    - Lebanon crisis
+    - مستقبل لبنان
+    - Lebanon future
+    - هوية لبنانية
+    - Lebanese identity
+    - وطن لبناني
+    - Lebanese homeland
+    rss_feeds:
+    - http://feeds.feedburner.com/LebanonBaptistFreshStart
+    - http://www.crossroadslebanon.com/media?format=rss
+    - https://100.lau.edu.lb/the-full-grade/video-feed.php
+    - https://afr.net/api/v2/podcast/podcastsbyidrss/?id=53747
+    - https://airchexx.com/category/airchexx-by-region/nashville/107-5-wyhy-lebanon-tn/feed/
+    - https://anchor.fm/s/1045f2530/podcast/rss
+    - https://anchor.fm/s/10475cf24/podcast/rss
+    - https://anchor.fm/s/12b3df50/podcast/rss
+    - https://anchor.fm/s/1acbc720/podcast/rss
+    - https://anchor.fm/s/1b201078/podcast/rss
+    - https://anchor.fm/s/267c80a0/podcast/rss
+    - https://anchor.fm/s/2a9ef7d0/podcast/rss
+    - https://anchor.fm/s/304becd8/podcast/rss
+    - https://anchor.fm/s/323519c0/podcast/rss
+    - https://anchor.fm/s/32c1f96c/podcast/rss
+    - https://anchor.fm/s/334a35fc/podcast/rss
+    - https://anchor.fm/s/3377d41c/podcast/rss
+    - https://anchor.fm/s/34a00e7c/podcast/rss
+    - https://anchor.fm/s/36438a60/podcast/rss
+    - https://anchor.fm/s/3854913c/podcast/rss
+    - https://anchor.fm/s/38566e30/podcast/rss
+    - https://anchor.fm/s/39853390/podcast/rss
+    - https://anchor.fm/s/3afdb134/podcast/rss
+    - https://anchor.fm/s/3b0fbd20/podcast/rss
+    - https://anchor.fm/s/3ef36248/podcast/rss
+    - https://anchor.fm/s/4b026a5c/podcast/rss
+    - https://anchor.fm/s/4c6884f8/podcast/rss
+    - https://anchor.fm/s/4ee80ce4/podcast/rss
+    - https://anchor.fm/s/569ee05c/podcast/rss
+    - https://anchor.fm/s/56a2a020/podcast/rss
+    - https://anchor.fm/s/69c85794/podcast/rss
+    - https://anchor.fm/s/6aa6227c/podcast/rss
+    - https://anchor.fm/s/70850d5c/podcast/rss
+    - https://anchor.fm/s/7cd54680/podcast/rss
+    - https://anchor.fm/s/83c84848/podcast/rss
+    - https://anchor.fm/s/8922813c/podcast/rss
+    - https://anchor.fm/s/895cb7f8/podcast/rss
+    - https://anchor.fm/s/94f964a8/podcast/rss
+    - https://anchor.fm/s/b6b87d4/podcast/rss
+    - https://anchor.fm/s/dc1862e4/podcast/rss
+    - https://artistadmin.manna.fm/xml/Lebanon-Ministries-Podcast.xml
+    - https://encounterchurchlebanonpodcast.libsyn.com/rss
+    - https://fbclebanon.podomatic.com/rss2.xml
+    - https://fbclpodcast.podomatic.com/rss2.xml
+    - https://feed.podbean.com/broJacobcedargrovebaptist/feed.xml
+    - https://feed.podbean.com/lebanonmonow/feed.xml
+    - https://feed.podbean.com/libnanie/feed.xml
+    - https://feed.podbean.com/noqta/feed.xml
+    - https://feed.podbean.com/prnpodcast1/feed.xml
+    - https://feed.podbean.com/thelebanesephysicianspodcast/feed.xml
+    - https://feeds.360.audion.fm/DQvRpG8_Z-O8Xq3NPlj0p
+    - https://feeds.acast.com/public/shows/644194d3996c1700114133bf
+    - https://feeds.buzzsprout.com/1019419.rss
+    - https://feeds.buzzsprout.com/1771989.rss
+    - https://feeds.buzzsprout.com/1833029.rss
+    - https://feeds.buzzsprout.com/2168569.rss
+    - https://feeds.captivate.fm/rorshok-lebanon-update/
+    - https://feeds.captivate.fm/shiftingnarratives/
+    - https://feeds.castos.com/7kk86
+    - https://feeds.libsyn.com/559215/rss
+    - https://feeds.megaphone.fm/THRH3649416167
+    - https://feeds.megaphone.fm/THRH7506688273
+    - https://feeds.redcircle.com/138ddb83-965a-4cc5-934d-489012c83435
+    - https://feeds.simplecast.com/I22vAZkN
+    - https://feeds.simplecast.com/bPZOly4F
+    - https://feeds.simplecast.com/z4m3iAOH
+    - https://feeds.soundcloud.com/users/soundcloud:users:138222458/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:224157993/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:358232909/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:402085908/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:425256702/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:433519281/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:660811143/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:672776474/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:712248634/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:76812381/sounds.rss
+    - https://feeds.soundcloud.com/users/soundcloud:users:878607559/sounds.rss
+    - https://feeds.transistor.fm/15a241db-038a-4ad9-9cab-5874855d4f16
+    - https://feeds.transistor.fm/c48e4270-34c2-4a73-9679-24dc7244da20
+    - https://feeds.transistor.fm/d817b684-81e9-4eac-b627-7ee450560f09
+    - https://feeds.transistor.fm/nabd-al-balad
+    - https://feeds.transistor.fm/nokat-shaware3-podcast
+    - https://feeds.transistor.fm/roya-daily-news-podcast
+    - https://feeds.transistor.fm/the-lebanon-huddle
+    - https://feeds.transistor.fm/todays-interview
+    - https://feeds.transistor.fm/trend
+    - https://files.hosting.thmanyah.com/podcasts/75/1713323146840-432/rss-feed.rss
+    - https://firstcommunitychurchlebanon.libsyn.com/rss
+    - https://itunes.ncsu.edu/mahjarpodcast/feed.xml
+    - https://lebanonbfc.org/podcast-category/lebanonbfc-sermons/feed/podcast
+    - https://lebanonfumc.com/mediafiles/sermons.xml
+    - https://lovinlebanonpodcast.libsyn.com/rss
+    - https://media.podeo.co/rss/MTE5NjM
+    - https://media.podeo.co/rss/MTQ4NDY
+    - https://media.podeo.co/rss/MTUyNjU
+    - https://media.podeo.co/rss/MTgwMTQ
+    - https://media.podeo.co/rss/NDk2Mw
+    - https://media.podeo.co/rss/NzEw
+    - https://media.podeo.co/rss/ODI1NA
+    - https://media.podeo.co/rss/OTA5Mw
+    - https://media.podeo.co/rss/OTMxNg
+    - https://media.rss.com/beirut-talks-2022-elections/feed.xml
+    - https://media.rss.com/dr-firass-abiad/feed.xml
+    - https://media.rss.com/gamwx-lebanon/feed.xml
+    - https://media.rss.com/honatalks/feed.xml
+    - https://media.rss.com/iraqipodcast/feed.xml
+    - https://media.rss.com/newlebanonchurch/feed.xml
+    - https://media.rss.com/primalapeconsulting/feed.xml
+    - https://oneeighty.podomatic.com/rss2.xml
+    - https://podcasts.ceu.edu/taxonomy/term/160/feed
+    - https://podcasts.ceu.edu/taxonomy/term/92/feed
+    - https://podcasts.subsplash.com/3hgctcy/podcast.rss
+    - https://podcasts.subsplash.com/9fhnvnn/podcast.rss
+    - https://podcasts.subsplash.com/r3pbnbj/podcast.rss
+    - https://podpoint.com/feed/160
+    - https://podpoint.com/feed/6175
+    - https://podpoint.com/feed/9740
+    - https://publishing.planningcenteronline.com/246898/podcast_feeds/19980.xml
+    - https://rss.buzzsprout.com/1021528.rss
+    - https://rss.buzzsprout.com/162414.rss
+    - https://rss.buzzsprout.com/2544711.rss
+    - https://rss.buzzsprout.com/904108.rss
+    - https://rss.castbox.fm/everest/206a5e9eb1274f799d36180ee8fa5e86.xml
+    - https://rss.podomatic.net/rss/rached-haddad.podomatic.com/rss2.xml
+    - https://sbs-ondemand.streamguys1.com/my-arab-identity/
+    - https://tjliu12.podomatic.com/rss2.xml
+    - https://www.alarabiya.net/feed/google-podcasts/ar/podcast/politic-memory.xml
+    - https://www.antiochcountryside.com/?feed=podcast
+    - https://www.lebanesearabicinstitute.com/feed/
+    - https://www.lebanongmc.com/sermons/feed/
+    - https://www.mamalisa.com/blog/category/kids-songs/lebanese-childrens-songs/feed/
+    - https://www.mnnonline.org/rss/countries/lbn.xml
+    - https://www.omnycontent.com/d/playlist/3e352bbd-204b-418d-81c2-ac8901314aac/4a875efa-f409-4749-92e2-ace0015babb3/3f471519-b8e5-4dbb-8435-ad3f009b91b8/podcast.rss
+    - https://www.omnycontent.com/d/playlist/d4d0c0fa-f828-469d-aeee-abd6009b5cd0/c33d9a47-5628-4c67-acc1-ae1d00d064f5/9e45b068-04ad-46e0-81cb-ae1d00daf584/podcast.rss
+    - https://www.saudigamer.com/category/podcast/feed/
+    - https://www.sermonaudio.com/rss_source.asp?sourceid=lebanonpca
+    - https://www.spreaker.com/show/1903514/episodes/feed
+    - https://www.spreaker.com/show/2047714/episodes/feed
+    - https://www.spreaker.com/show/2080339/episodes/feed
+    - https://www.spreaker.com/show/2083728/episodes/feed
+    - https://www.spreaker.com/show/2571686/episodes/feed
+    - https://www.spreaker.com/show/2706226/episodes/feed
+    - https://www.spreaker.com/show/3131202/episodes/feed
+    - https://www.spreaker.com/show/3181655/episodes/feed
+    - https://www.spreaker.com/show/3228223/episodes/feed
+    - https://www.spreaker.com/show/4113678/episodes/feed
+    - https://www.spreaker.com/show/4307373/episodes/feed
+    - https://www.spreaker.com/show/4770648/episodes/feed
+    - https://www.spreaker.com/show/5650697/episodes/feed
+    - https://www.spreaker.com/show/6359449/episodes/feed
+    - https://www.spreaker.com/show/6600993/episodes/feed
+  tiktok:
+    hashtags:
+    - lebanese
+    - lebanesearabic
+    - lebanesedialect
+    - lebanon
+    - الجنوب
+    - الشمال
+    - الوضعبلبنان
+    - بيروت
+    - حياةلبنانية
+    - زحلة
+    - صيدا
+    - ضحكلبناني
+    - طرابلس
+    - كلاملبناني
+    - كوميديالبنانية
+    - لبنان
+    - لبناني
+    - لبنانية
+    - لهجةلبنانية
+    - مشاكللبنان
+    users:
+    - beirutlife
+    - lebanesecontent
+    - lebanesecreator
+    - lebanesevoice
+    - lebanontalks
+  youtube:
+    api_key: AIzaSyCpom6uUYlCAcLbMNyAZSEPpH3IvBHxs4w
+    channels:
+    - UC-4HzgWT8175P-bEajEz_iw
+    - UC-C4lOni0e6CnHlVEqXNUHQ
+    - UC-DbhY2AXIdelhftMF858uQ
+    - UC-YhNO0JfSc0kKFfHqpBh7Q
+    - UC-nnXsRRI3uOIJbTZz66PDg
+    - UC-tmoqyn-8NnIdsO_XUhrPQ
+    - UC0AMnWOZRjaFjLjqT_MvvlA
+    - UC0Js6FuY06x-dMXVkW0ueow
+    - UC0KbhQC8ItJ33d-fERw9kVg
+    - UC0bxIrKHh8lGeAcdY_pNW_A
+    - UC0hXXVnhgr3lxmP46dmWmEA
+    - UC0jZUEUFdTHAHsc4uLsVrVg
+    - UC11PCullL59XWM1XFsg4Ibw
+    - UC11gNr0pGQ_QH-wkzJgaofw
+    - UC16dgi4CVjQpzfQIaqwnuiQ
+    - UC1F4CV2YjvxKgNOOFqd_dfQ
+    - UC1jW6MSxX-1QwMYpvbisGsg
+    - UC1zknAKL2S73mRTOpMWGaUA
+    - UC2-qYt5oDCMDKffCuqCSeWQ
+    - UC22W9D8YHMYd8-Is7SoUFag
+    - UC2ARAQQHcgN2hc2c2WMy2Xg
+    - UC2Ap_PgozlwxLjS3reogR2A
+    - UC2GdEW0LMQsjlQrkAJ2GwVQ
+    - UC2GhlxEXVYJW8uTvZJSUOew
+    - UC2cqeWy1MSGQYpYLRHv-G0A
+    - UC2e317-WsBfWcy5GPKICThw
+    - UC2mmWWjCpA2vZWhlTpHHmVg
+    - UC30UltiI6MZJC8N_nCn_few
+    - UC34umpAmzNZL606rjJVvy0Q
+    - UC3Bix_EjY7eN0P7P4aL1y6w
+    - UC3I1GBt9m06eWqE547wWCUw
+    - UC3kGpFygggSveRgSKSXFfCw
+    - UC3u4F2lK6pgsb0qtcvVdKMw
+    - UC3uOwAgmquYz0bPNcvXILzg
+    - UC3x5Ctm_ACPIk8sdZ8Jt2UQ
+    - UC3yJANgYXG5wnnH9zQWJ20w
+    - UC3zZeC2Jk2wzio4OIF6wHRQ
+    - UC4-qU9OOmzjRyKmwGEnC9_g
+    - UC4JCsTLFcHGk10qpiNMh0Ww
+    - UC4nmM7yd3nEpeaaG0ShFmUQ
+    - UC51nMDy1HHOHRrp6Q8CRvGg
+    - UC54PbzCjUcXMKgv6kW3pyNA
+    - UC54eQV5sUfEN8Y1Tw7CuQzw
+    - UC5Fu75y9crO8oBNC1RmwX_A
+    - UC5NFl0ZCWpg4t6OojN40o1w
+    - UC5TIpi5cEJlcCCow7EIQe1A
+    - UC5TpsHDtfmJm4m5nSTK9tOA
+    - UC5ZF4iMhn1tNLCRVOoiDobA
+    - UC5_NGZ1667l1geYTe6FDSrQ
+    - UC5f_fxJa5G9AR9L3J5Z2I4A
+    - UC5goAiwj7apuFCqCdxN5ZFw
+    - UC5imZEaqX26Q5iikEJqQ6ZQ
+    - UC5jI8RwESEaYKOZDFmJBmpA
+    - UC5nFITZA-9Uw56kGo-cuPLw
+    - UC5pwJF3R1Xef5XmBpFTzaZw
+    - UC5qZo9pebVtbqE48aAuCLig
+    - UC5rUhLWmnTZWtdd8rI9xiCw
+    - UC5v6-RQbHSmDgr-8q_FU0sA
+    - UC5ww6Nu6aqd40UMti3ktqbQ
+    - UC64JcEn3TLC3h_eTT6S0bDQ
+    - UC6KkGvArcxCIqQIWse08hFQ
+    - UC6LQap__iw3jTppP4_K7Tlg
+    - UC6MJ-dEaefm-k6iPN_s3GSA
+    - UC6N9KBx5iEJ7aoVofg2nKyQ
+    - UC6ZsfjnWY-pSb1Sc3FZXUVQ
+    - UC6hstdAAGoZYoxvhVNvjMGw
+    - UC6kJmnCMBb6NiykYpw0y3dw
+    - UC6sfajsgWqztn2zn1OLFuIQ
+    - UC6yScZv-t-pSFlsnQSnckpg
+    - UC72Y62V1OYQB7O3XhXYyQ0A
+    - UC7HAELbJ8mUiTr6ad9QHqEQ
+    - UC7KbjZ-wD3NtYSkU8nx7reQ
+    - UC7MCsr5uq2ULP4VvnvT0pZg
+    - UC7QPRH10wVimm_1OpZ8Gx3w
+    - UC7WcZ8RTddl6EU9_y9EECUw
+    - UC7WlGe0-aMiHbTLDyPQMAyw
+    - UC7dNUNOc-diYore18UgyDNg
+    - UC7jg9rXEQtH7zdIXZWN8Tvg
+    - UC7mCgzz-LYRt-a3mCvUbccg
+    - UC7r5qBA4xCF2pk378b94Uag
+    - UC7s0ztJGPIxafeC72FMwdzg
+    - UC7vUuhqIPwH1-2aYM9RuwHg
+    - UC82_aXnnlyuTRV8oN2-WASQ
+    - UC8BHrbWSnqyJfB-ac5T3vag
+    - UC8IsrQ3Fvg1X2QboSRIMBHA
+    - UC8Q1gJfcRy5HKweJJb35gyQ
+    - UC8Ud-VH-wCsAj-SI6k9Vhfg
+    - UC8oqL2WdM5ixzvDDdCN8kkg
+    - UC8t7HxQbc-V0ZIec-ezCmfQ
+    - UC8zLsPjxZO93htaYMY5P0Rw
+    - UC91t69KDn8WZMgKZct6303g
+    - UC9YbjpvsFZytS0DnO1FnTKw
+    - UC9_XmAwE5szLHF76FjMylaw
+    - UC9c0-etgT-mc_OmH38MLIzA
+    - UC9k0mI5nbS6Urj8KTQ_6RKw
+    - UC9kfuY9lEUouzUI78gFHrAA
+    - UC9mO2kFvYSXcdPzqnC1wVdQ
+    - UC9mWEpb_UlaDtiVI41DuBoA
+    - UC9uuNhLwo7YYOaj1rl6PQ6w
+    - UC9wc4QF3TYsRvXDCoCynfbQ
+    - UCA-QfmCiEeQqLontPYlTLiA
+    - UCA4RpeNjm8Jn8pyubf6ffYg
+    - UCA86QAvpqR3KQOAbX-kbqKg
+    - UCACicNDQx-HA5MFnl75a-OQ
+    - UCAOQG3R_md7sVM91w6TNndw
+    - UCASiDrzARSOzXfCI8HYldFA
+    - UCAavcGr6yGQ7H7DKaUUqDrQ
+    - UCArK7aSQ68vRCiJY2m7spkA
+    - UCAz8hOD4V1ZHNdpniT4GCdQ
+    - UCBB8ITNqDHzfSQAcbprqFrA
+    - UCBCRcVI2u_RnoRYYBLcDcXw
+    - UCBKh5VudlLnwB5pcgF2rW9A
+    - UCBWLHGMK10ebd2jndWUnHdw
+    - UCBabL0u9g07sajxhc2lVbPQ
+    - UCBsee-FbhGzlvX-tCgnX7hA
+    - UCBxznX2GxMBAYZpbI7XXUqQ
+    - UCCLGPPSiOvNPGPcBaE1Hcdw
+    - UCCYxSCvOHkZfAh7ifsenSsw
+    - UCD5g-iMBn7cJEqxdNCiUbTQ
+    - UCD5r0h-KFIRKzhZUUKMRANg
+    - UCDFiKLbVCISFdsPdplB1xog
+    - UCDGol2Z8P4UlodCa5_lWGVQ
+    - UCDJ8aVdsDfDa4VZaMKtxh8A
+    - UCDS9LgqCGoRGoW0Zpy2yWxw
+    - UCDTaZkyCk4_Gm8IZvl8pJNg
+    - UCDZr6bshttCQcRFbfgLGtqg
+    - UCDnjkCuO2vBOYLfI8euKdqg
+    - UCDxUApXwCeWruQdSDIcqqcg
+    - UCDyg0Mp9sPhygG-aJD6sg6w
+    - UCE89otwVaT7ipmWkKDfuGtA
+    - UCEAIoL7sC41LD65G1xQNg6g
+    - UCETcp3bwgIK2IEe_jCl4omw
+    - UCEZfJck6FSa2W3-01J2_fhw
+    - UCEdmOk9fvA-tB6XZZq7tJ5g
+    - UCEweSiaBEvC7iuVF9knX0eg
+    - UCEyFlMBp4wr0-PGEGpsrs2w
+    - UCF00D1R3Z7aAfG8OJqE34Ng
+    - UCF3zbfgL0p4B1YN0dHLx6ow
+    - UCFF5n3bs7iN0WdnPOf_L6Gg
+    - UCFQvte-TMHp4pmcwwgaOp1Q
+    - UCFXFLCFfZKrPPrK_ONyctNQ
+    - UCFZ6h6sdLkkmZERHelYaChw
+    - UCFemRlIEXGrebqs-F88pduA
+    - UCFjgonB3vjo9Aw7nvD4JoJQ
+    - UCFwz3DMFy1Zi_EUDml8-MlA
+    - UCFyHcFheY1EU6xj4iTeRkcw
+    - UCGHQPYtclwwLcgIIIDluPAA
+    - UCGaKztgHVYpvb2MU3QtQEZQ
+    - UCGaOCoe5XaJJKNEKWM1WpJQ
+    - UCGoKM_Psq7r04_GRI_ZL_OA
+    - UCHFWfNl-WmZrr-yITeAByxw
+    - UCHR1xhjsTyLZxMMP9x0nrNQ
+    - UCHRsbVfuf1Z8TOldyWvmwFg
+    - UCHX6IeCvaPMiPr3OGFJ6EIA
+    - UCHYHW3deOgpMUebE92Fxfkg
+    - UCHYXf9VZK51bNOz-zJX9T6Q
+    - UCHZXy8CWWwLG-TsJuckC9nA
+    - UCHl4eesIQNy05ekQ-yfD4uw
+    - UCHtYdYwaPBzVrOwydlt5ZOg
+    - UCIF4uQqHLXq008UpDiFr3UA
+    - UCIHaR1SrBb-5O5iEwyqlt_Q
+    - UCIMLacEVAmD5vnSWec1iqXQ
+    - UCINReix5YcK7cSVnEEhAGLw
+    - UCISm-1lOU77HhLVHzoQdhjg
+    - UCIT0FtCn4y_SwL5TIefHzFQ
+    - UCIrfwNuI8kFuC_m45jtRzBg
+    - UCJ-ssfVh4uJ-Xx0JKpwD3kQ
+    - UCJ6HLWziCx-HN0KDYvr_bnA
+    - UCJ9C_JthcrnXu8UEaDSuA_A
+    - UCJ9FVTxa2JaK4GnN6RxeNag
+    - UCJJgYbhks5t-8QvP5wbBRkA
+    - UCJOf115yeaGSZA9ynIDXQBA
+    - UCJP1Tu-q1u_6zADMBKkOCLA
+    - UCJSHW8RPBK-LOwdaXrM5B5w
+    - UCJdjasUjbULVpCG4rt3Hr3A
+    - UCJrzIcHTFtZETCTaof8kW6Q
+    - UCJs_GT_XmAEygS96NlWsSfw
+    - UCJu-0vnWt0wFMQuLsjzwjRQ
+    - UCK9yiwTnssFlC5awbuo4itw
+    - UCKPL9gw15mEPAFOhcoBA0FA
+    - UCKT6DIOCIaFEIoA4MeVSsRQ
+    - UCKXmVTvVMQz_fggy66HlgQQ
+    - UCKYUNSG2kvLxPnJDNnamkcQ
+    - UCKo3Jmz_H0uwNSpFK-9o_Xg
+    - UCKs0SprFUhd365WMwN12zJA
+    - UCKvJhxgc-K20vZuBGPvfE2A
+    - UCLB2b6r4jfV4vs6Hvv0YO2g
+    - UCLaHtEEaqVcTz5zy12ePh7w
+    - UCLifNZHNO7xdu8y4vTman-w
+    - UCLkdAJay59EpsEFLcVJji0Q
+    - UCMPjkiin8LUuULc-bjzHhpw
+    - UCMhix9VzJL1BY4pvNVu7OmA
+    - UCMmuuzJZDzqcXgBNb6Nxq8w
+    - UCN1Lyow-3R4jtN-cddDd_eQ
+    - UCN99FKBlcDYVXLPRTFWobnQ
+    - UCNIljPMZycrxcOxWNfWKl8g
+    - UCNQJ2K18a5a22eDAoUQIHAg
+    - UCNRQ5inYHZc2im6rDGHa6Yw
+    - UCNZc4QltgJgImE3B2_tE3Hg
+    - UCNdLN-_-AC3amUBSp77wvZA
+    - UCNhgD9DFB49clOj0_ma-bTw
+    - UCNhxzS24N-SeW2FuW11HIvQ
+    - UCNveFM4i_hQL4MVncXVm8Qg
+    - UCO-EAGJKWzlvb0RjtKtE70A
+    - UCO049nzzgs7C4LL9PbUMIFg
+    - UCO3ml7tjILLvL60TTPiwBtQ
+    - UCO5suRgAHMI95XKEwwXMTyQ
+    - UCOUIkZFp9-LJ1oWZd8AABnw
+    - UCOYhE25tOMw6RFlIaQQLc5Q
+    - UCOphWdbBTaIyRac1zYZ2SWg
+    - UCPQTJBCOlTm-ZwWVJkztedg
+    - UCPdwj_ef298FggeQHihiX-Q
+    - UCPnClZSOI-vKLRXQaLyB0wQ
+    - UCPp8FWdKrvvvFLeCFbJBhPQ
+    - UCPr31tgLR4tICnDUcilJsMA
+    - UCPzpSoQQ0BdEkBLWImin55w
+    - UCQ8Ljftfs1bjp81-J_IWpOA
+    - UCQ8ON8HzEa0orFCLV1HOAZg
+    - UCQCiM9YOEVCCsU26oSb8Nrg
+    - UCQb3_Z9sDru1HT_bAYadDvA
+    - UCQbBk_HLD2nTtT23ccfna8Q
+    - UCQkFKz6gS8HfTLTeHv9wnSA
+    - UCQmwrREWZ_RRxY_oLwj4Cmw
+    - UCQt2u1aneAsr0hWjqEaOq2Q
+    - UCQuWNKtExdqaYe-L3Niq22g
+    - UCR2B51bRCCcVn19NUniuqYg
+    - UCRCT7iqW6p0D87B_C6JHBrw
+    - UCROpIz2pMtfBZM94_csg4jg
+    - UCRPu6pek9FGRHgoyC6K9zGg
+    - UCRba9v75sMzuYRAw38_Gwdw
+    - UCRsWkyxFX69yCm29c8tafrw
+    - UCS8OstwMfpvwTKx8508zl6A
+    - UCSJYMhomuj5_4uiuIMjAURQ
+    - UCSLrXSWHd3Kz-hnsWN89PMQ
+    - UCSZLIGV_QgrXYySP1pl5Iew
+    - UCS_PlPtEvERTg5hgCyWqZdA
+    - UCS_QoeX7p6zDzQc97lLBiGQ
+    - UCSexcq5jFIFgvcZTydbksRw
+    - UCSte3737EVF3G3RcCJaH7ag
+    - UCTVAunQRf5emk4XwnOKEk5Q
+    - UCTV_EtdatcCeQqPzkhgGCPQ
+    - UCT_BAt8KCLCTy2DTBCdi4cg
+    - UCTyZvmT93zn2S0XksTISkBg
+    - UCU7k1Qz0X4sUFnD0iR6PNfg
+    - UCU8aQKvhQ2c9mPViju-UUtg
+    - UCU8m934FDNsdUR7HMyncA4w
+    - UCUBKG7dbFdGh3BSnOMsXyLQ
+    - UCUDiANKvmofaN8iN7ggq5XA
+    - UCUM2Q6aQXYex5y36sBej0Ng
+    - UCUTFJ783fgLXctRSJREaq0g
+    - UCUXcisx6eMJhUvFdov-HPoQ
+    - UCUur_EwVwWXgXodoR9HttvQ
+    - UCV0Wm4_M30LN0vplmWXGUJQ
+    - UCV8VhHiw9Yd2NnKSd5lCYkw
+    - UCVCNqg2JlzLzpOQch545BQQ
+    - UCVIQHl5FA_fxSFPNg7qucvQ
+    - UCVJdZFvRCE13HJvf8d3wP2Q
+    - UCVK-5XhiBVh4i08yqhrHsuQ
+    - UCVRpWMpL6CAMj2H96JkaYVQ
+    - UCVlAsbQEG1yvoAYzt1TEo0Q
+    - UCW39zufHfsuGgpLviKh297Q
+    - UCW68o7G-s6GunZ-Gv2Z7EKQ
+    - UCWJ_2lAc5t4j-mZ8O6-kO2Q
+    - UCWYSDUfCy-lHLGW0MVd6eyA
+    - UCX-XgyB8SQurLqXiT3b3wNg
+    - UCX1EzdtdUqr0kdL0CL15v4w
+    - UCXAT2vN8E-FaICaJn9izY4w
+    - UCXD0-2a-OMJGWxzMBRbF1dA
+    - UCXFXhrCSWP_oDAGdnJS0GLQ
+    - UCXfuY8FuUsFK4vBSZiX5xYA
+    - UCXiaKIFe8eMMiMmfcAEcxiw
+    - UCXoXeaXbbk3X1g4iwpOlnkg
+    - UCXuOe3PvIQjHAoKaZ4wzBmQ
+    - UCXw6Xl0V5-4U6pny9s5muyg
+    - UCXwgApFzPQYkoHXA2P_5lLw
+    - UCY8ughUV_WAqCFc88i0zTIg
+    - UCYOBmYr418nAKnQUbeS9knA
+    - UCYQMsCjpUI1OhKDopudlaKA
+    - UCYcXZeZSoZDneSsCKVauGlA
+    - UCYdqJYUn7d9kCLBth58KxXg
+    - UCYfDN6-NLXKoNgUI3BRveNQ
+    - UCYjeHzmOdH81NkD8cIK380A
+    - UCYq49-dbAxD1m3bgE6vvULg
+    - UCZ3xodgJWwMeRCE59ZNNCTQ
+    - UCZ7KFsGFApiDxmvo5EnN3JA
+    - UCZ8VfMPtWm4zVSSr_uvqowA
+    - UCZA0OSZCFxnRdEDweWR8Uqw
+    - UCZE_fS8Is8pWgbikA6EDHoA
+    - UCZJ1SQGsYyr4tOM-daFjEtw
+    - UCZQ8W7lZP5m0-wqxtWVW8SQ
+    - UCZV2ij7vU73Dh8C1JAI3QWQ
+    - UCZlIozVbGcWRabDdugYMX4A
+    - UCZwH92PZUNwp4jh1l-N7-Zw
+    - UCZyBPsj2mAdmogNGD_GAKMA
+    - UC_g1mXEkOLja-y4iANKalzA
+    - UC_hYTe99U0UzzJTSqx1aBbw
+    - UC_tkqY8YBaGRAMB1sBaIrsA
+    - UCa275fUmPgYmcn_LFWVUWZw
+    - UCa5hctOxDc8IqO9wnUOx-5g
+    - UCa8YVytCMVZVHtQ-OKqRg3A
+    - UCaE5P1pvwzVxajdzVawrgoA
+    - UCaFYtYwrS98kyYv5OZfUPoQ
+    - UCaHNZrP4yuSYyziC9FzBNEw
+    - UCaL1n3ruCYQEVRM5HEhKUbg
+    - UCaRAIobYcRY1ELvd1rpbXCg
+    - UCaT2gVPWosIplg0PdMv0FTg
+    - UCaUXoOA7Q-unu9kwWyQDrqQ
+    - UCaVf0PNo6MT7ThmkW6WE5xg
+    - UCaeGK2AssEImuooN5zqzpcw
+    - UCagoebY0tGIijLhHqKs6v-w
+    - UCahpxixMCwoANAftn6IxkTg
+    - UCao0WEtB-ZOzZ_PSrcyHrhQ
+    - UCauRaUYp6SrBncg6Aky_KfA
+    - UCavNRDlJrTS4yKneG5ci-qw
+    - UCb7oMrqwZnr3ZCayqnkkb8w
+    - UCbI7u4UI_hOpUyi5Aj6delw
+    - UCbMXXx8BWLCS-3cfi9V9tpA
+    - UCbRxmjIDECR8IiZjgq3a1bQ
+    - UCb_Gw4ggD9LNebiXaM72drw
+    - UCb_p1274zwUvDZ1j68RYDeQ
+    - UCbi-3gNmoBBGmb4Afq5KYmw
+    - UCboi9tFaUpreNfGMBoZ339A
+    - UCbsP40Q4DfC3rYmrSB2AKYA
+    - UCcHwn1zyaoWYwfwpxw6b29Q
+    - UCcbeSglukIcFf95ffsUgxpA
+    - UCckXDT7M43Sfavpp3qmvSSA
+    - UCcnX9O6Q03MB8YuqCp6aarw
+    - UCcrEHXwye_Lkww9Z6r81zCQ
+    - UCd1VEdzYuRP453Ao5-HYRpA
+    - UCd79-0qM-D9jzL29Og9niWQ
+    - UCdAp-Pz-78WP3QvyT3kYvYw
+    - UCdUp5vHINCdtZS31flL_prg
+    - UCdjGcsLB3j7incRi2dVPaPA
+    - UCe60iazEPCbIKsSi02aTxgg
+    - UCe6704ThmRjgi-ArS_CEc0g
+    - UCeG3YC5zVqoXoC6zhB8iPAg
+    - UCeWDHO2mMY5fCKgblZBMzvg
+    - UCeZZP_jg2bsF_uMS0-N16dg
+    - UCebZ9QZ2n3qvNQg4skD5s6g
+    - UCec_75mqcgupvxt7n4n_HjQ
+    - UCemZzNYddZ-NbbxWsWBxfUQ
+    - UCeq6NBzce7zVD5V2NpNYGeA
+    - UCeu_Q8pPVc8IylGN_uUta5g
+    - UCeuuuTaxqJ3GI50PKGeaWhA
+    - UCf3D5xwP0zcgZ41A197f9pQ
+    - UCf9u8N1mZaEDjTZOjeG-CrA
+    - UCfFNqm1xbaFU310nLNIMXfg
+    - UCfR5J1JaY0kpjChE4kCFJaw
+    - UCfiwzLy-8yKzIbsmZTzxDgw
+    - UCfnmeEVx3CyWbUvSJLztQ7g
+    - UCfwpnnubdGUF40AdzM_t6sw
+    - UCg4WjY_I7ehI2NM9uHd6qZQ
+    - UCgCNL2uj_SA4vpfO_s7xmrQ
+    - UCgGv-9ZB2fLSAabeNRsR2ww
+    - UCgHulk5_pE8m_gIx8VUyBUQ
+    - UCga4N76Fl4sgcn30iwBs7aQ
+    - UCgi9aUt2Tsvv2_Oae3-Yn4A
+    - UCgj2QoJ-kzAuysYe0y0mXCQ
+    - UCgjGnL5nsC-aCqMmL_lEvdw
+    - UCgoKH0e1n5II305aJamUnWA
+    - UCgs6s3qqVzE2YwHgcmPG6YQ
+    - UChGj8o3dIKqGdTz5oeL7cMg
+    - UChc0Yw9NkSb8Thy53MsM3gw
+    - UChhGJONwU_9ODfq5oy1dUaQ
+    - UChhn6GcmLW-fpZZ3UjJudGg
+    - UChnf7fs7mlfbzsJpwWnJBYA
+    - UCi5e3nn9GbkW1TzmCO1iQ1w
+    - UCiAzWIxs4nLSfxqojK_8YuQ
+    - UCiK6LoD8E9HEoNpivfu6BSA
+    - UCiMplCEVdc5YflcI3GeDy-g
+    - UCiVPRY39o3PIjBzssrX_l2g
+    - UCilIXgkRcEYMvFAVklDDCMw
+    - UCimvSjaS2-b_ip3WvMDdyug
+    - UCizQoaJI4mOIlCoB1Vif6QA
+    - UCj0s3qS7woP_Wfoumd903tg
+    - UCj9guQ9w15AWRB7hiykg-6A
+    - UCjFOpqnNPqa1dG2HbPlKkog
+    - UCjJ8oZwuVudiuJ7UnXBWZVw
+    - UCjKgutz3apOfz7tG9uovYGg
+    - UCjKtDKDd3npTEAKppKlP7sA
+    - UCjRr_pzbJGfKk_CcDJ-Vffw
+    - UCjYJtRqhvYD4EARcKSTPW0Q
+    - UCjYiGE7qagNvJSQmX6PyEmw
+    - UCjcI0who-er-yJeb2WHd9jA
+    - UCjhIy4Gtaiwl6wyTMz_ZSiw
+    - UCjubAIEuyyrGmyovMawUcCw
+    - UCk-nqlijquLjCaG5PAnC_pQ
+    - UCkBGVtUwCBbC3xF4HsNhnyQ
+    - UCkDKW2jJUukNKE0-4zblfmw
+    - UCkWN-yLIlPC-A7tY2WIIv9g
+    - UCl6bpGVlx107JVDoAarwlIg
+    - UCl78qglXdlKXETuK8MPPWPA
+    - UCl7Vtm_XPdlaogDCMG7rIqw
+    - UCl9Qn2BBpQjr7irEyWrafRQ
+    - UClAHt1UxFVIrSYaclAgmfyw
+    - UClMZ150W1mBQqykefQJhT5g
+    - UClUElSczMkRCo46r96ws10w
+    - UCliA66A1xuBaLXvN7HH2Bsw
+    - UClinjfG9SVXSHMdjx8yGoWg
+    - UClpgKBBGeem_jYXw3FpBD8w
+    - UCm8r_gqLiRBercam30IU9AA
+    - UCmBNQBJV_c8mU5eM9EI0TDA
+    - UCmCwilAvH6aJhpsyfN9qzRg
+    - UCmMdaCV5f1u1HWAiUEjFXDQ
+    - UCmaTt4b-Ze8d7fteihzxYcA
+    - UCmfyY8EdAL8ftxaZwVEIOgg
+    - UCmqX_pWCdznIqJaSPndzp0A
+    - UCmskG3yfnWpjB5gE8w1EIsw
+    - UCn46A5cGfUcokIQtNRHSjrQ
+    - UCnC1OVaVrZm59zeYR62nWxw
+    - UCnRocSoxAbP1GLuZfrpXjbw
+    - UCnaothEFKBgpucBf2tEb0LA
+    - UCnd-7dwNG9tgHVmfZVfBiqA
+    - UCnkTo_wMqGtLiA4xX7roORg
+    - UCnpUiPdOOTWH9jsWC3gHJMA
+    - UCnt2rile1R3pXth-OkBHdBw
+    - UCnth4XtNirwas7jH8Q7eyaA
+    - UCny48viBopBPO4QreJcs5nQ
+    - UCo-b_ZGpqkQ1wIVhPLD7VEg
+    - UCo0hq6VEXDE-tvA7AtiH4Qg
+    - UCo6OGeAZo1-ycGKeisvpxxQ
+    - UCo86Nun1zlH6aYMxbR07pXw
+    - UCoNPNf0FMXz1aKSPE622PWA
+    - UCoPKo0JmAOu8aB5H6V-3JPw
+    - UCoTEoyBmKfs2tqcnKsoW2_A
+    - UCoaY0MW9gp1kKgzdIVKDZgA
+    - UCoi1EREhidRsWOPDP0U8Bfw
+    - UCon_-FivLncfeatzAPn0jWw
+    - UCooSbihENRvS5VbnOB43FWA
+    - UCooilQENr4Z2Ro6zZ5pivfw
+    - UCp7LflwGMcjuLk4sXDOcuaw
+    - UCpE6gpKewomi17XDyPfpFjA
+    - UCpUZQEgQZ411-QX_gm8f23w
+    - UCpX2ict6czFZ_ZaxmhUrISA
+    - UCpXKKFfjYZV6R8m2dJEf3aA
+    - UCpovzufzZSP3kCYm16B5Hyw
+    - UCpyz3KkzDXNTMBW7oBQc3_A
+    - UCq83GWTvulG9VyyaOqoWHuw
+    - UCqLrqow4jdsyZ6pfgHuB4HA
+    - UCqPbU8chBMTRo2JtgDK15Aw
+    - UCqPwihUv1_Zz48oUiXBeYzA
+    - UCqnjU8u3Vl14ParDQMQgj_w
+    - UCqvhuAmpWCO-GwtzguxbgfA
+    - UCr3g2QWBS-nHLWWCscrRFzg
+    - UCrILarZy_dDadqkFDiKeU_w
+    - UCrYZ3GRpKKkxyLnJn4jSDUw
+    - UCrZOPgZ_G_ZqS6IHw_LxtrQ
+    - UCrfdaLQRbPXaOZkU0z6HnYQ
+    - UCrgNix41fI8Opmz0d4RxKMA
+    - UCrj5BGAhtWxDfqbza9T9hqA
+    - UCrjLFGrpl9QTyJwvDxQICrQ
+    - UCrr9dGiGb4gGY-C-eUy3A8Q
+    - UCsCXvFmCmHZFXiqNHAXuTpg
+    - UCsUhNihIdwIydfNimFCoi9A
+    - UCsXhP0n0Dy_WXmHXjw2Y4gQ
+    - UCsXraAZI9oRV4YkHwz6Y1tQ
+    - UCsnM9lJ3dKoi7Lp3hfGAAyg
+    - UCsrn9NHWbKDsvluIcUeZufA
+    - UCsuyL3ccnZYJMRiJn_jjoqg
+    - UCt2oM1FKczCoKwv_tl9E3Dw
+    - UCt6LHDmWbd6iupmZRdjlwkQ
+    - UCt9HlfjIl36sx3eUKtuWKxA
+    - UCtNs_ednOzM8Q5uNUipXH7Q
+    - UCtW2Yo_cHzFXHsl6YBa6FnQ
+    - UCtZWR60mU9d1TS1AZgVsnhg
+    - UCt_CtTBlCdYPshgZ6V-sH1g
+    - UCtv8mJaEGLjWklQV4ZizDtg
+    - UCu-eYfX5ioZkXXPHioDZPyQ
+    - UCuATba0RpvR3ivSmXPqx1mQ
+    - UCuBgdjDx-JXuyEO0afPpXzA
+    - UCuJDz6R_lHaxeGnFTnv3tjg
+    - UCuLNZirpkm2HYxq-tTiXnOA
+    - UCuNl-iQkq64JIo9zWuZIpXA
+    - UCuSYEUrcpOyenQT3eXY5M1g
+    - UCuhg7UBDaP0rmxJ5NgMapmQ
+    - UCuuWS3nsdvajRIuT-QhOTjA
+    - UCuz5Cso1WakYT36SAOUtQKQ
+    - UCv0uJ_pLcVhOZah_pQyprjA
+    - UCvOq5UoKsjCAwlBwjxP8bkw
+    - UCvRJ5OjiauQWLkO2p-VXvBg
+    - UCvTzovICvOf_mAXfQURZTDQ
+    - UCvbZicKPPqF7-PTJqBM30xA
+    - UCvqdopIBOi2ji8d-kc86YKw
+    - UCvs9halxxo0lLYZpiQFJ_Og
+    - UCw0eVlJXvL1WHlq7TQ3-GFA
+    - UCw5MrPpycGzdlldrCjuMznA
+    - UCw8OVMFSjq4dhJQxHC9jjgQ
+    - UCwCjIImpPva1qCxBAGzCW8A
+    - UCwEELpndYDIAmN49bms7vLA
+    - UCwHnBT-DQErnQ1k7LnEbiHQ
+    - UCwTzW8dYDXUKBhe2KCeaBYg
+    - UCwX3zPzHYYxU3qqbH3KVdVw
+    - UCwlmIYOqeOZyw32H0lK9jWA
+    - UCwpO-KilkXz4RYuugJmeKvw
+    - UCwpZJws-OkxH3mVUcRQjZ8A
+    - UCwqi5wif_kWbkBfqW1C1VOg
+    - UCwtFGKwEkKt-8rBsOYaMS0w
+    - UCwwEfOk8DymjdikCXZfzHDQ
+    - UCxQYEpGJGnRYCsJgGc5UrNQ
+    - UCxRSpkGOH_09pxKvgD8S5jQ
+    - UCxSXBlPOCOh1zn8tLANXUIA
+    - UCxZWxYq_I23aoY-VhRgwSkQ
+    - UCxmYKEunSX3kNEuvQw7qyRg
+    - UCy1FbI8QI52GYEyMyWjlf2g
+    - UCy3JB0EiRrcA6JMcEA8XcGw
+    - UCy7Mp-Sy-Mk6iizyNytatQg
+    - UCy90ifaoj_bpEvt1pM-F4pw
+    - UCyDbtQ-zFHoSKlfOhmXgSyA
+    - UCya2bI1RuO6ckXcl4yvE0hg
+    - UCz8zc1NuDw-tMTgSXB820gA
+    - UCz9RN0FZ49tUZg8H6zNLrwA
+    - UCzAM2vz5HlgX4vGj7ye-zRQ
+    - UCzBWPitaUxOqm_v9NHZ6wuQ
+    - UCzDpzBLpK2eRA5iqHdspKtg
+    - UCzKETT_pTJJHJ9zAeAjoBRw
+    - UCzKaBQDTjmqL1GLwJfxtqXg
+    - UCzKmrQJjdTHj3DDxaFzi94g
+    - UCzb4M6UwMxiBzHfIYvYFyRQ
+    - UCzixfFiEFMjhSB3R9UdUdsA
+    - UCzo_f_CqE-QQqOevD4s989g
+    - UCzwEy50KEkBkHFIsuiJgs6A
+    region_code: LB
+    relevance_language: ar
+    search_queries:
+    - بودكاست لبناني
+    - podcast libanais
+    - lebanese podcast
+    - حوار لبناني
+    - مقابلة لبنانية
+    - اخبار لبنان
+    - أخبار لبنان
+    - Lebanon news
+    - أخبار بيروت
+    - اخبار بيروت
+    - نشرة اخبار لبنان
+    - نشرة الأخبار اللبنانية
+    - Lebanese news
+    - أخبار سياسية لبنان
+    - اخبار سياسية لبنان
+    - كرة سلة لبنان
+    - basketball lebanon
+    - مباراة كرة سلة لبنان
+    - لبنان كرة سلة
+    - الدوري اللبناني لكرة السلة
+    - lebanese basketball league
+    - رياضة لبنان
+    - رياضة لبنانية
+    - sports lebanon
+    - برنامج لبناني
+    - مسلسل لبناني
+    - Lebanese TV show
+    - Lebanese series
+    - دراما لبنانية
+    - كوميديا لبنانية
+    - برنامج حواري لبناني
+    - Lebanese talk show
+    - مقابلة لبنانية
+    - حوار لبناني
+    - Lebanese interview
+    - مقابلة مع لبناني
+    - حوار مع لبناني
+    - لبنان
+    - Lebanon
+    - بيروت
+    - Beirut
+    - لهجة لبنانية
+    - Lebanese dialect
+    - اللهجة اللبنانية
+    - العربية اللبنانية
+    - lebanese arabic
+    - فن لبناني
+    - موسيقى لبنانية
+    - Lebanese music
+    - Lebanese culture
+    - ثقافة لبنانية
+    - مطرب لبناني
+    - Lebanese singer
+    - راديو لبنان
+    - Lebanese radio
+    - إذاعة لبنانية
+    - برنامج إذاعي لبناني
+    - وثائقي لبنان
+    - Lebanese documentary
+    - تاريخ لبنان
+    - Lebanese history
+    - سياسة لبنان
+    - Lebanese politics
+    - أحداث لبنان
+    - Lebanese events
+    - وضع لبنان
+    - مجتمع لبناني
+    - Lebanese society
+    - حياة لبنانية
+    - Lebanese lifestyle
+    - شباب لبنان
+    - اقتصاد لبنان
+    - Lebanese economy
+    - أعمال لبنان
+    - Lebanese business
+    - مطبخ لبناني
+    - Lebanese cuisine
+    - أكل لبناني
+    - Lebanese food
+    - سياحة لبنان
+    - Lebanese tourism
+    - جمال لبنان
+    - Lebanon travel
+transcription:
+  compute_type: int8
+  device: cpu
+  full_model_size: large-v2
+  screening_model_size: medium
+  transcripts_dir: data/transcripts

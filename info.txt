@@ -1,0 +1,7 @@
+Values To Be Justified
+config/base.yaml -> min_seconds
+src/platforms/youtube.py -> ydl_opts (supposedly perfect for speech recognition or dialect analysis)
+src/cfg.py -> model_size, device, compute_type
+
+Need Revisiting
+scripts/02_download_audio.py -> error downloads management

@@ -1,0 +1,81 @@
+# Backup of Facebook and Instagram config for easy re-enabling.
+# Copy the relevant section into config/base.yaml when you want to use these platforms again.
+
+facebook:
+  pages:
+    - aljadeedonline
+    - lbci
+    - mtvlebanon
+    - otvlebanon
+    - teleliban
+    - nbnlebanon
+    - futuretvlebanon
+    - lebanonfiles
+    - thisislebanonnews
+    - sawtbeirut
+    - lebanondebate
+    - lebanon24
+    - lebanonnews
+    - lebanonbreakingnews
+    - lebanonnow
+    - lebanonupdates
+    - voiceoflebanon
+    - radiolebanon
+    - sawtlebanon
+    - radioshark
+    - radioone
+    - mixfmlebanon
+    - nrgradiolebanon
+    - lebaneseradio
+    - kalamennas
+    - bi2oulou
+    - sarralwatan
+    - alhadath
+    - almasira
+    - aljadeednews
+    - lbcinews
+    - mtvlebanonnews
+    - lebanesepodcast
+    - podcastlebanon
+    - lebanesetalks
+    - lebanesestories
+    - lebanesevoices
+    - lebanesecontent
+    - lebaneseculture
+    - lebaneseheritage
+    - lebanesemusic
+    - lebaneseart
+    - lebanesefood
+    - lebanesecuisine
+    - lebanesebasketball
+    - lebanonsports
+    - lebanesefootball
+    - lebaneseteams
+    - lebaneseuniversity
+    - lebaneseeducation
+    - lebanesestudents
+    - lebanesebusiness
+    - lebaneseeconomy
+    - lebanesecompanies
+    - lebanesecommunity
+    - lebaneseyouth
+    - lebanesewomen
+    - lebanesefamily
+    - lebaneseabroad
+    - diasporalebanese
+    - beirutnews
+    - beirutupdates
+    - tripolinews
+    - sidonnews
+    - zahlenews
+    - lebanesetalkshow
+    - lebaneseinterview
+    - lebaneseconversation
+    - lebanesedialect
+    - lebaneselanguage
+
+instagram:
+  users:
+    - lebanesecontent
+    - lebanesevoice
+    - lebanontalks

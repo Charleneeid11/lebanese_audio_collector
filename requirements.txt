@@ -1,0 +1,162 @@
+# =========================
+# Core configuration & validation
+# =========================
+pydantic>=2.0
+python-dotenv
+PyYAML
+
+# =========================
+# Database
+# =========================
+sqlalchemy>=2.0
+
+# =========================
+# Audio download & processing
+# =========================
+yt-dlp
+faster-whisper
+
+# =========================
+# YouTube (limited API usage)
+# =========================
+# Used ONLY for channel discovery (resolving channel IDs)
+google-api-python-client
+
+# =========================
+# Arabic Dialect Identification (ADI)
+# =========================
+transformers
+torch
+
+# =========================
+# RSS-based discovery (YouTube, Podcasts)
+# =========================
+feedparser
+
+# =========================
+# Utilities
+# =========================
+requests
+
+
+# ============================================================
+# Environment setup
+# ============================================================
+# Activate virtual environment:
+#   source .venv/Scripts/activate
+#
+# Install dependencies:
+#   pip install -r requirements.txt
+
+
+# ============================================================
+# How the collector works (current design)
+# ============================================================
+
+# The system is a queue-driven, multi-stage pipeline designed to
+# collect spoken audio and identify Lebanese Arabic speech.
+#
+# Discovery, download, transcription, and scoring are decoupled
+# so the pipeline can resume safely and scale gradually.
+
+
+# ============================================================
+# STEP 0 — Channel Discovery (occasional, API-limited)
+# ============================================================
+# tools/discover_youtube_channels.py
+#
+# - Uses YouTube Data API sparingly
+# - Resolves channel NAMES or search queries → channel IDs
+# - Writes resolved channel IDs directly into base.yaml
+#
+# This step is NOT run frequently to avoid API quota exhaustion.
+# Once channels are known, all further discovery uses RSS.
+
+
+# ============================================================
+# STEP 1 — Content Discovery via RSS (primary discovery method)
+# ============================================================
+# scripts/01b_discover_youtube_rss.py
+#
+# - Reads YouTube channel IDs from base.yaml
+# - Uses public RSS feeds:
+#     https://www.youtube.com/feeds/videos.xml?channel_id=<ID>
+# - Extracts video URLs (no API quota used)
+# - Inserts URLs into the DB queue with:
+#     status = "DISCOVERED"
+#     platform = "youtube"
+#
+# Duplicate URLs are automatically ignored by DB constraints.
+
+
+# ============================================================
+# STEP 2 — Audio Download
+# ============================================================
+# scripts/02_download_audio.py
+#
+# - Fetches items with status = "DISCOVERED"
+# - Downloads audio using yt-dlp
+# - Applies basic validation:
+#     • minimum duration
+#     • maximum download duration (screening cap)
+# - Saves audio to:
+#     data/raw_audio/<video_id>.wav
+#
+# On success:
+#   status = "DOWNLOADED"
+#   audio_path + duration_seconds stored
+#
+# On failure:
+#   status = "ERROR_DOWNLOAD"
+
+
+# ============================================================
+# STEP 3 — Screening Transcription
+# ============================================================
+# scripts/03_transcribe_screening.py
+#
+# - Fetches items with status = "DOWNLOADED"
+# - Extracts short audio segments (screening clips)
+# - Transcribes using a lightweight Whisper model
+# - Saves transcripts to:
+#     data/transcripts/clip_<id>_screening.json
+#
+# On success:
+#   status = "SCREENED"
+#
+# On failure:
+#   status = "ERROR_SCREEN"
+
+
+# ============================================================
+# STEP 4 — Lebanese Dialect Scoring
+# ============================================================
+# scripts/04_score_dialect.py
+#
+# - Fetches items with status = "SCREENED"
+# - Loads screening transcripts
+# - Applies hybrid Lebanese dialect identification:
+#     • ADI classifier (Arabic dialect model)
+#     • Lebanese-specific lexical evidence
+#     • Duration-aware and register-aware penalties
+#
+# Decision outcomes:
+#   status = "POTENTIAL_LB"     → high confidence Lebanese
+#   status = "BORDERLINE_LB"    → plausible / mixed Lebanese
+#   status = "REJECTED"         → non-Lebanese
+#
+# Errors:
+#   status = "ERROR_SCORING"
+#
+# This conservative-first design prioritizes precision while
+# retaining borderline data for later analysis.
+
+
+# ============================================================
+# Notes
+# ============================================================
+# - YouTube RSS is the main scaling mechanism (free, unlimited)
+# - API usage is intentionally minimized
+# - The queue allows safe restarts and incremental processing
+# - Additional platforms (TikTok, Instagram, Podcasts) can be
+#   added by implementing new discovery + download modules
