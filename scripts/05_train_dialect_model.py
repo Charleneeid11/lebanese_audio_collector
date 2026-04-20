@@ -39,54 +39,67 @@ def build_feature_vector(text: str, diagnostics: dict):
     return np.concatenate([lex_features, embedding])
 
 
+def load_transcript_text(item_id: int, transcripts_dir: str) -> str | None:
+    path = Path(transcripts_dir) / f"clip_{item_id}_screening.json"
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return " ".join(s["text"] for s in data["screening_samples"])
+
+
+# Minimum strong Lebanese markers (شو, هيك, هلق, بدي, etc.) required for a
+# WEAK_POSITIVE item to be used as positive training data. Items from trusted
+# Lebanese channels with zero strong markers are likely MSA/formal content.
+# Threshold determined empirically: ground truth annotation of 45 WEAK_POSITIVE
+# items showed precision jumps from 67% (unfiltered) to 81% (strong >= 1).
+MIN_STRONG_LB_HITS = 1
+
+
 def main():
     settings = Settings.load()
     db = DB(settings.db_url)
 
-    # Fetch metadata-based weak labels (prefer over model-derived)
-    positives = db.fetch_queue(status="WEAK_POSITIVE", limit=500)
-    negatives = db.fetch_queue(status="WEAK_NEGATIVE", limit=500)
-    if len(positives) + len(negatives) < 50:
-        # Fallback to model-derived labels if insufficient weak labels
-        positives = positives or db.fetch_queue(status="POTENTIAL_LB", limit=500)
-        negatives = negatives or db.fetch_queue(status="REJECTED", limit=500)
+    positives = db.fetch_queue(status="WEAK_POSITIVE", limit=None)
+    negatives = db.fetch_queue(status="WEAK_NEGATIVE", limit=None)
+    neg_rejected = db.fetch_queue(status="REJECTED", limit=None)
+
+    print(f"Raw counts — WEAK_POSITIVE: {len(positives)}, WEAK_NEGATIVE: {len(negatives)}, REJECTED: {len(neg_rejected)}")
 
     X = []
     y = []
+    pos_kept, pos_filtered = 0, 0
 
     for item in positives:
-        transcript_path = (
-            Path(settings.transcription.transcripts_dir)
-            / f"clip_{item.id}_screening.json"
-        )
-        if not transcript_path.exists():
+        text = load_transcript_text(item.id, settings.transcription.transcripts_dir)
+        if text is None:
             continue
 
-        data = json.loads(transcript_path.read_text(encoding="utf-8"))
-        text = " ".join(s["text"] for s in data["screening_samples"])
-
         diagnostics = final_dialect_score(text)
-        features = build_feature_vector(text, diagnostics)
 
+        if diagnostics["lexicon_details"]["strong_lb_hits"] < MIN_STRONG_LB_HITS:
+            pos_filtered += 1
+            continue
+
+        features = build_feature_vector(text, diagnostics)
         X.append(features)
         y.append(1)
+        pos_kept += 1
 
-    for item in negatives:
-        transcript_path = (
-            Path(settings.transcription.transcripts_dir)
-            / f"clip_{item.id}_screening.json"
-        )
-        if not transcript_path.exists():
+    print(f"Positives — kept: {pos_kept}, filtered out (strong_lb < {MIN_STRONG_LB_HITS}): {pos_filtered}")
+
+    neg_count = 0
+    for item in negatives + neg_rejected:
+        text = load_transcript_text(item.id, settings.transcription.transcripts_dir)
+        if text is None:
             continue
-
-        data = json.loads(transcript_path.read_text(encoding="utf-8"))
-        text = " ".join(s["text"] for s in data["screening_samples"])
 
         diagnostics = final_dialect_score(text)
         features = build_feature_vector(text, diagnostics)
-
         X.append(features)
         y.append(0)
+        neg_count += 1
+
+    print(f"Negatives — total: {neg_count} (WEAK_NEGATIVE + REJECTED with transcripts)")
 
     X = np.array(X)
     y = np.array(y)
