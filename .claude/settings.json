@@ -1,0 +1,14 @@
+{
+  "allowedTools": [
+    "Read",
+    "Grep",
+    "Glob",
+    "WebFetch",
+    "WebSearch",
+    "Agent",
+    "Write",
+    "Edit",
+    "TodoWrite",
+    "Bash"
+  ]
+}
