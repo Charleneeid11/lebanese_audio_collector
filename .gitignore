@@ -9,6 +9,11 @@ data/
 # Trained models
 models/
 
+# SpeechBrain Whisper cache (Elyadata Day-3 system pulls whisper-large-v3 here
+# per hyperparams.yaml's `save_path: whisper_hf`)
+whisper_hf/
+pretrained_DID/
+
 # Python
 __pycache__/
 *.py[cod]

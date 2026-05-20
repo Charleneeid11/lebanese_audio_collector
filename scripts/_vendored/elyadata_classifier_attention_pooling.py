@@ -1,6 +1,37 @@
-import torch
+import sys
+import types
 
-from speechbrain.inference.interfaces import Pretrained
+# speechbrain's LazyModule.__getattr__ unconditionally forces full import on
+# every attribute access — including dunders like `__file__` that Python's
+# `inspect` probes via `hasattr`. Since hasattr only swallows AttributeError
+# (not ImportError), benign introspection of one lazy module's existence
+# crashes when an unrelated optional dependency (k2, flair, ...) is missing.
+# Patch __getattr__ to convert ImportError → AttributeError for dunder probes
+# so introspection short-circuits cleanly. Must be installed BEFORE importing
+# any speechbrain submodule.
+import speechbrain.utils.importutils as _siu  # noqa: E402
+
+_orig_lazymod_getattr = _siu.LazyModule.__getattr__
+
+def _safe_lazymod_getattr(self, attr):
+    try:
+        return _orig_lazymod_getattr(self, attr)
+    except ImportError:
+        if attr.startswith("__") and attr.endswith("__"):
+            raise AttributeError(attr) from None
+        raise
+
+_siu.LazyModule.__getattr__ = _safe_lazymod_getattr
+
+# Also stub `k2`: speechbrain.integrations.k2_fsa unconditionally imports k2
+# at module top-level (not via LazyModule). The stub never gets called since
+# Elyadata doesn't use any k2 features.
+if "k2" not in sys.modules:
+    sys.modules["k2"] = types.ModuleType("k2")
+
+import torch  # noqa: E402
+
+from speechbrain.inference.interfaces import Pretrained  # noqa: E402
 
 
 class WhisperDialectClassifier(Pretrained):

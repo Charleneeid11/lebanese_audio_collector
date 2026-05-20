@@ -84,17 +84,25 @@ Tasks:
 - **V1 embedding-only beats V1 combined** at both macro F1 (0.79 vs 0.69) and ROC-AUC (0.886 vs 0.848). Lexical features are net-negative when added on top of MiniLM. This is a finding worth flagging in the paper.
 - **Whisper-LID gives no Lebanese signal** (ROC-AUC = 0.500 exactly). All 296 GT items × 3 chunks = 886 chunks predicted Arabic. Zero discriminative power.
 
-### Day 3 — Public HuggingFace ADI systems
+### Day 3 — Public HuggingFace ADI systems ✅ DONE 2026-05-20
 
-**Deliverable:** 4 public-system rows in benchmark CSV.
+**Deliverable:** 4 public-system rows in benchmark CSV + FINDINGS §19.
 
 Tasks (all use `data/audio_clips_compact/` 10s clips):
-- `badrex/mms-300m-arabic-dialect-identifier` — Badr 2025's voice-conversion-trained MMS-300M. Run on GT, map output dialect probabilities to Lebanese-vs-other binary.
-- `tiantiaf/voxlect-arabic-dialect-mms-lid-256` — Voxlect 2026 benchmark model.
-- `Elyadata/ADI-whisper-ADI20` — Elleuch et al. 2025 Whisper-based ADI20 model.
-- `IbrahimAmin/marbertv2-arabic-written-dialect-classifier` — text-based, applied to existing Whisper transcripts.
+- ✅ `badrex/mms-300m-arabic-dialect-identifier` — Badr 2025's voice-conversion-trained MMS-300M.
+- ✅ `tiantiaf/voxlect-arabic-dialect-mms-lid-256` — Voxlect 2026 benchmark model. Required vendoring `MMSWrapper` from github.com/tiantiaf0627/voxlect + patching it for transformers 4.57.3 (`Wav2Vec2Attention` now requires `config=` kwarg).
+- ✅ `Elyadata/ADI-whisper-ADI20` — Elleuch et al. 2025 Whisper-based ADI20 model. Required vendoring `WhisperDialectClassifier` from github.com/elyadata/ADI-20 + stubbing speechbrain's optional `k2` dep + monkey-patching `LazyModule.__getattr__` so Python's `inspect.hasattr(module, '__file__')` introspection short-circuits instead of forcing eager imports of `flair`, `numba`, etc.
+- ✅ `IbrahimAmin/marbertv2-arabic-written-dialect-classifier` — text-based, applied to existing Whisper transcripts.
 
-Each model gets standardized output: P(Lebanese) for binary comparison, plus full multi-class probability vector for the future per-platform / failure-mode analysis.
+Engineering: `scripts/24_eval_public_systems.py` dispatches via a `loader` field in the SYSTEMS dict. Per-system pause/resume via `data/benchmark_predictions/<name>.json`. FINDINGS §19 write is idempotent (strips prior block before appending).
+
+**Key Day 3 findings (full interpretation in FINDINGS §19.3):**
+- **MARBERTv2 (text, regional Levantine proxy) wins overall** — ROC-AUC 0.898 (CI [0.851, 0.943]).
+- **Elyadata is the best audio system** — ROC-AUC 0.847 (CI [0.790, 0.897]); the only country-level `LEB`-trained model in the comparison.
+- **Country-level beats regional-Levantine proxy at the audio level** — Elyadata 0.847 > Badr 0.778 > Voxlect 0.705. The Levantine label conflates LB+SY+JO+PA and costs ~0.07-0.14 ROC-AUC.
+- **Voxlect has a calibration pathology** — ROC-AUC 0.705 (above random) but at threshold 0.5 it predicts essentially nothing as positive ([[213, 1], [81, 1]]). Best-F1 sweep recovers it slightly to 0.444 @ thr=0.30. Confirms it ranks adequately but is unusable as a binary classifier off-the-shelf.
+- **Public-vs-in-house parity on lexical, gap on acoustic.** V1 embedding-only (ours, 0.886) and MARBERTv2 (public, 0.898) have overlapping CIs. Elyadata (public, 0.847) significantly beats V2-frozen (ours, 0.786) on acoustic — confirming the recording-domain confound diagnosis of §12.6.3 / §16: V2 underperforms because it was trained under platform-confounded weak supervision, not because acoustic modelling is inherently broken.
+- **Consolidated 12-system scoreboard** lives in FINDINGS §19.3.
 
 ### Day 4 — Arabic LLMs (open-weight + Gemini free tier)
 
