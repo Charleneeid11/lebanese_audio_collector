@@ -1,0 +1,281 @@
+% =============================================================================
+% references.bib — Lebanese Audio Collector thesis
+% =============================================================================
+% Conventions
+%   - Field values verified to the extent possible from the cited source.
+%   - Where a precise field (DOI, page numbers, exact venue volume) is not
+%     known with high confidence, it is intentionally left blank or omitted
+%     rather than fabricated.
+%   - Entries flagged "% VERIFY" mean the title/authors/year are correct but
+%     a specific field (venue, page numbers, etc.) should be confirmed against
+%     the canonical source before final submission.
+%   - Unicode names retained where possible; double-brace any all-caps tokens
+%     in titles you want preserved as-is during BibTeX casing.
+% =============================================================================
+
+
+% -----------------------------------------------------------------------------
+%  Datasets — Arabic dialect / speech
+% -----------------------------------------------------------------------------
+
+@inproceedings{ali2016mgb2,
+  author    = {Ali, Ahmed and Bell, Peter and Glass, James and Messaoui, Yacine and Mubarak, Hamdy and Renals, Steve and Zhang, Yifan},
+  title     = {{The MGB-2 Challenge: Arabic Multi-Dialect Broadcast Media Recognition}},
+  booktitle = {2016 IEEE Spoken Language Technology Workshop (SLT)},
+  year      = {2016},
+  note      = {Al Jazeera broadcast Arabic recognition challenge; cited as the candidate MSA broadcast corpus deferred to future work (FINDINGS Section 7.8)},
+}
+
+@inproceedings{ali2017mgb3,
+  author    = {Ali, Ahmed and Vogel, Stephan and Renals, Steve},
+  title     = {{Speech Recognition Challenge in the Wild: Arabic MGB-3}},
+  booktitle = {2017 IEEE Automatic Speech Recognition and Understanding Workshop (ASRU)},
+  year      = {2017},
+  note      = {Egyptian Arabic recognition / dialect ID challenge; cited for dialect-ID literature context},
+}
+
+@inproceedings{ali2019mgb5,
+  author    = {Ali, Ahmed and Shon, Suwon and Samih, Younes and Mubarak, Hamdy and Abdelali, Ahmed and Glass, James and Renals, Steve and Choukri, Khalid},
+  title     = {{The MGB-5 Challenge: Recognition and Dialect Identification of Dialectal Arabic Speech}},
+  booktitle = {2019 IEEE Automatic Speech Recognition and Understanding Workshop (ASRU)},
+  year      = {2019},
+  note      = {Introduces the ADI17 17-dialect Arabic dataset used as the contrastive corpus in this work},
+}
+
+@inproceedings{shon2018adi,
+  author    = {Shon, Suwon and Ali, Ahmed and Glass, James},
+  title     = {{Convolutional Neural Networks and Language Embeddings for End-to-End Dialect Recognition}},
+  booktitle = {Proc. The Speaker and Language Recognition Workshop (Odyssey)},
+  year      = {2018},
+  note      = {Earlier ADI / dialect recognition baseline cited for context},
+}
+
+@inproceedings{conneau2022fleurs,
+  author    = {Conneau, Alexis and Ma, Min and Khanuja, Simran and Zhang, Yu and Axelrod, Vera and Dalmia, Siddharth and Riesa, Jason and Rivera, Clara and Bapna, Ankur},
+  title     = {{FLEURS: Few-Shot Learning Evaluation of Universal Representations of Speech}},
+  booktitle = {2022 IEEE Spoken Language Technology Workshop (SLT)},
+  year      = {2022},
+  note      = {Multilingual speech corpus; ar\_eg config used as the MSA contrastive class in this work},
+}
+
+@inproceedings{ardila2020commonvoice,
+  author    = {Ardila, Rosana and Branson, Megan and Davis, Kelly and Henretty, Michael and Kohler, Michael and Meyer, Josh and Morais, Reuben and Saunders, Lindsay and Tyers, Francis M. and Weber, Gregor},
+  title     = {{Common Voice: A Massively-Multilingual Speech Corpus}},
+  booktitle = {Proceedings of the Twelfth Language Resources and Evaluation Conference (LREC)},
+  year      = {2020},
+  pages     = {4218--4222},
+  note      = {Considered for MSA but Mozilla Common Voice was withdrawn from the HuggingFace Hub in October 2025},
+}
+
+@phdthesis{halabi2016msa,
+  author    = {Halabi, Nawar},
+  title     = {{Modern Standard Arabic Phonetics for Speech Synthesis}},
+  school    = {University of Southampton},
+  year      = {2016},
+  note      = {Source of the Arabic Speech Corpus — single-speaker; rejected as MSA contrastive due to single-speaker confound},
+}
+
+@inproceedings{bouamor2018madar,
+  author    = {Bouamor, Houda and Habash, Nizar and Salameh, Mohammad and Zaghouani, Wajdi and Rambow, Owen and Abdulrahim, Dana and Obeid, Ossama and Khalifa, Salam and Eryani, Fadhl and Erdmann, Alexander and Oflazer, Kemal},
+  title     = {{The MADAR Arabic Dialect Corpus and Lexicon}},
+  booktitle = {Proceedings of the Eleventh International Conference on Language Resources and Evaluation (LREC)},
+  year      = {2018},
+  note      = {City-level Arabic dialect parallel corpus; cited for related dialect-corpus work},
+}
+
+@inproceedings{salameh2018finegrained,
+  author    = {Salameh, Mohammad and Bouamor, Houda and Habash, Nizar},
+  title     = {{Fine-Grained Arabic Dialect Identification}},
+  booktitle = {Proceedings of the 27th International Conference on Computational Linguistics (COLING)},
+  year      = {2018},
+  pages     = {1332--1344},
+  note      = {Fine-grained dialect ID baseline using MADAR; cited for dialect-ID literature},
+}
+
+
+% -----------------------------------------------------------------------------
+%  Models — speech foundation models, ASR, language models
+% -----------------------------------------------------------------------------
+
+@inproceedings{babu2022xlsr,
+  author    = {Babu, Arun and Wang, Changhan and Tjandra, Andros and Lakhotia, Kushal and Xu, Qiantong and Goyal, Naman and Singh, Kritika and von Platen, Patrick and Saraf, Yatharth and Pino, Juan and Baevski, Alexei and Conneau, Alexis and Auli, Michael},
+  title     = {{XLS-R: Self-supervised Cross-lingual Speech Representation Learning at Scale}},
+  booktitle = {Proceedings of Interspeech 2022},
+  year      = {2022},
+  note      = {Backbone (300M params) used for v2 acoustic embeddings; pretrained on 436K hours of speech across 128 languages},
+}
+
+@inproceedings{baevski2020wav2vec2,
+  author    = {Baevski, Alexei and Zhou, Yuhao and Mohamed, Abdelrahman and Auli, Michael},
+  title     = {{wav2vec 2.0: A Framework for Self-Supervised Learning of Speech Representations}},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2020},
+  note      = {Foundational self-supervised speech architecture; XLS-R extends this},
+}
+
+@article{hsu2021hubert,
+  author    = {Hsu, Wei-Ning and Bolte, Benjamin and Tsai, Yao-Hung Hubert and Lakhotia, Kushal and Salakhutdinov, Ruslan and Mohamed, Abdelrahman},
+  title     = {{HuBERT: Self-Supervised Speech Representation Learning by Masked Prediction of Hidden Units}},
+  journal   = {IEEE/ACM Transactions on Audio, Speech, and Language Processing},
+  year      = {2021},
+  volume    = {29},
+  pages     = {3451--3460},
+  note      = {Alternative self-supervised speech backbone considered; cited in FINDINGS Section 7.9 as a comparable backbone to wav2vec 2.0 / XLS-R},
+}
+
+@inproceedings{radford2023whisper,
+  author    = {Radford, Alec and Kim, Jong Wook and Xu, Tao and Brockman, Greg and McLeavey, Christine and Sutskever, Ilya},
+  title     = {{Robust Speech Recognition via Large-Scale Weak Supervision}},
+  booktitle = {Proceedings of the 40th International Conference on Machine Learning (ICML)},
+  year      = {2023},
+  note      = {Whisper ASR — used (`base` model) for screening transcription},
+}
+
+@inproceedings{reimers2019sbert,
+  author    = {Reimers, Nils and Gurevych, Iryna},
+  title     = {{Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks}},
+  booktitle = {Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  year      = {2019},
+  note      = {Methodology for sentence embeddings; v1 features use the multilingual MiniLM derivative paraphrase-multilingual-MiniLM-L12-v2},
+}
+
+@inproceedings{wang2020minilm,
+  author    = {Wang, Wenhui and Wei, Furu and Dong, Li and Bao, Hangbo and Yang, Nan and Zhou, Ming},
+  title     = {{MiniLM: Deep Self-Attention Distillation for Task-Agnostic Compression of Pre-Trained Transformers}},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2020},
+  note      = {Underlying architecture of the v1 transcript-embedding model},
+}
+
+@inproceedings{inoue2021camelbert,
+  author    = {Inoue, Go and Alhafni, Bashar and Baimukan, Nurpeiis and Bouamor, Houda and Habash, Nizar},
+  title     = {{The Interplay of Variant, Size, and Task Type in {A}rabic Pre-trained Language Models}},
+  booktitle = {Proceedings of the Sixth Arabic Natural Language Processing Workshop (WANLP)},
+  year      = {2021},
+  note      = {CAMeL-Lab BERT family (including dialect-Arabic variant); the camelbert-da model wrapper exists in this repo but is disabled in the current pipeline},
+}
+
+
+% -----------------------------------------------------------------------------
+%  Software / libraries (cite if results depend on a specific implementation)
+% -----------------------------------------------------------------------------
+
+@inproceedings{wolf2020transformers,
+  author    = {Wolf, Thomas and Debut, Lysandre and Sanh, Victor and Chaumond, Julien and Delangue, Clement and Moi, Anthony and Cistac, Pierric and Rault, Tim and Louf, R{\'e}mi and Funtowicz, Morgan and Davison, Joe and Shleifer, Sam and von Platen, Patrick and Ma, Clara and Jernite, Yacine and Plu, Julien and Xu, Canwen and Le Scao, Teven and Gugger, Sylvain and Drame, Mariama and Lhoest, Quentin and Rush, Alexander M.},
+  title     = {{Transformers: State-of-the-Art Natural Language Processing}},
+  booktitle = {Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations (EMNLP)},
+  year      = {2020},
+  pages     = {38--45},
+  note      = {Library used for loading and running pretrained speech / language models},
+}
+
+@inproceedings{paszke2019pytorch,
+  author    = {Paszke, Adam and Gross, Sam and Massa, Francisco and Lerer, Adam and Bradbury, James and Chanan, Gregory and Killeen, Trevor and Lin, Zeming and Gimelshein, Natalia and Antiga, Luca and Desmaison, Alban and K{\"o}pf, Andreas and Yang, Edward and DeVito, Zach and Raison, Martin and Tejani, Alykhan and Chilamkurthy, Sasank and Steiner, Benoit and Fang, Lu and Bai, Junjie and Chintala, Soumith},
+  title     = {{PyTorch: An Imperative Style, High-Performance Deep Learning Library}},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2019},
+  note      = {Deep learning framework used for embedding extraction},
+}
+
+@article{pedregosa2011sklearn,
+  author    = {Pedregosa, Fabian and Varoquaux, Ga{\"e}l and Gramfort, Alexandre and Michel, Vincent and Thirion, Bertrand and Grisel, Olivier and Blondel, Mathieu and Prettenhofer, Peter and Weiss, Ron and Dubourg, Vincent and Vanderplas, Jake and Passos, Alexandre and Cournapeau, David and Brucher, Matthieu and Perrot, Matthieu and Duchesnay, {\'E}douard},
+  title     = {{Scikit-learn: Machine Learning in Python}},
+  journal   = {Journal of Machine Learning Research},
+  year      = {2011},
+  volume    = {12},
+  pages     = {2825--2830},
+  note      = {LogisticRegression and MLPClassifier used in v1 and v2},
+}
+
+@article{lhoest2021datasets,
+  author    = {Lhoest, Quentin and Villanova del Moral, Albert and Jernite, Yacine and Thakur, Abhishek and von Platen, Patrick and Patil, Suraj and Chaumond, Julien and Drame, Mariama and Plu, Julien and Tunstall, Lewis and Davison, Joe and {\v{S}}a{\v{s}}ko, Mario and Chhablani, Gunjan and Malik, Bhavitvya and Brandeis, Simon and Le Scao, Teven and Sanh, Victor and Xu, Canwen and Patry, Nicolas and McMillan-Major, Angelina and Schmid, Philipp and Gugger, Sylvain and Delangue, Cl{\'e}ment and Matussi{\`e}re, Th{\'e}o and Debut, Lysandre and Bekman, Stas and Cistac, Pierric and Goehringer, Thibault and Mustar, Victor and Lagunas, Fran{\c{c}}ois and Rush, Alexander M. and Wolf, Thomas},
+  title     = {{Datasets: A Community Library for Natural Language Processing}},
+  journal   = {Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing: System Demonstrations (EMNLP)},
+  year      = {2021},
+  note      = {HuggingFace Datasets library; required version pinning to 2.21.0 for FLEURS loading-script support (see FINDINGS Section 7.8)},
+}
+
+
+% -----------------------------------------------------------------------------
+%  Additional related work — Arabic NLP / dialect ID
+% -----------------------------------------------------------------------------
+
+@book{habash2010introduction,
+  author    = {Habash, Nizar Y.},
+  title     = {{Introduction to Arabic Natural Language Processing}},
+  publisher = {Morgan \& Claypool Publishers},
+  series    = {Synthesis Lectures on Human Language Technologies},
+  year      = {2010},
+  note      = {Standard reference for Arabic NLP background; covers dialect variation},
+}
+
+@article{harrat2019arabic,                 % VERIFY exact venue / pages
+  author    = {Harrat, Salima and Meftouh, Karima and Smaili, Kamel},
+  title     = {{Maghrebi Arabic Dialect Processing: An Overview}},
+  journal   = {Journal of International Science and General Applications},
+  year      = {2019},
+  note      = {Survey-style coverage of dialect processing for the Maghreb varieties; cited for dialect-region context. % VERIFY},
+}
+
+@inproceedings{abdul-mageed2018you,        % VERIFY exact venue / pages
+  author    = {Abdul-Mageed, Muhammad and Alhuzali, Hassan and Elaraby, Mohamed},
+  title     = {{You Tweet What You Speak: A City-Level Dataset of {A}rabic Dialects}},
+  booktitle = {Proceedings of the Eleventh International Conference on Language Resources and Evaluation (LREC)},
+  year      = {2018},
+  note      = {Dialect-tagged Twitter corpus; relevant for related dialect-ID work. % VERIFY},
+}
+
+@inproceedings{el-haj2018habibi,           % VERIFY exact venue / pages
+  author    = {El-Haj, Mahmoud and Kruschwitz, Udo and Fox, Chris},
+  title     = {{Habibi: A Multi Dialect Multi National Arabic Song Lyrics Corpus}},
+  booktitle = {Proceedings of the Eleventh International Conference on Language Resources and Evaluation (LREC)},
+  year      = {2018},
+  note      = {Multi-dialect Arabic lyrics corpus including Lebanese; cited for prior Lebanese-text work. % VERIFY},
+}
+
+
+% -----------------------------------------------------------------------------
+%  Recent (2021+) — verify before citing
+%
+% The fork prompt asked for 2-3 recent Lebanese-specific dialect-ID papers.
+% Specific citations are not added here as placeholders to avoid fabrication.
+% Suggested literature search before final submission:
+%   - Search Google Scholar for: "Lebanese dialect identification" 2021..2024
+%   - Search ACL Anthology for: WANLP / ArabicNLP proceedings 2022-2024
+%   - Search Interspeech 2022-2024 for: "Levantine Arabic dialect"
+%   - Likely candidate venues: WANLP, ArabicNLP, OSACT, LREC, Interspeech
+% -----------------------------------------------------------------------------
+
+
+% -----------------------------------------------------------------------------
+%  Notes for paper authors
+% -----------------------------------------------------------------------------
+%
+% Citation map (where each work is cited in FINDINGS.md / paper draft):
+%   ali2016mgb2             → Section 7.8 / 8.2.3 (MGB-2 candidate MSA broadcast corpus, deferred to future work)
+%   ali2017mgb3             → Related work — earlier MGB Arabic dialect challenges
+%   ali2019mgb5             → Section 7.7 (ADI17 selected as contrastive source)
+%                             Section 8.2 (contrastive dataset)
+%   shon2018adi             → Related work — earlier ADI baseline
+%   conneau2022fleurs       → Section 7.8 (FLEURS selected for MSA)
+%                             Section 8.2.4 (final MSA import result)
+%   babu2022xlsr            → Section 7.9 (acoustic embedding backbone)
+%                             Section 8.3 (Phase 3 — Acoustic v2 Classifier)
+%   baevski2020wav2vec2     → Section 7.9 (background for XLS-R)
+%   hsu2021hubert           → Section 7.9 (alternative SSL speech backbone considered)
+%   radford2023whisper      → Section 7.1 (Whisper model selection)
+%                             Section 2.4 (audio processing)
+%   ardila2020commonvoice   → Section 7.8 (rejected due to HF withdrawal Oct 2025)
+%   halabi2016msa           → Section 7.8 / 8.2.1 (rejected — single-speaker confound)
+%   reimers2019sbert        → Section 4.2 (v1 ML classifier features)
+%   wang2020minilm          → Section 4.2 (specific architecture used)
+%   inoue2021camelbert      → Section 4.3 (CAMeL-Lab BERT, currently disabled)
+%   bouamor2018madar        → Related work — dialect-corpus background
+%   salameh2018finegrained  → Related work — dialect-ID prior art
+%   habash2010introduction  → Background — Arabic NLP
+%   wolf2020transformers    → Software stack
+%   pedregosa2011sklearn    → Software stack
+%   paszke2019pytorch       → Software stack
+%   lhoest2021datasets      → Section 7.8 / 8.2.4 (FLEURS via datasets==2.21.0)
+%
+% =============================================================================

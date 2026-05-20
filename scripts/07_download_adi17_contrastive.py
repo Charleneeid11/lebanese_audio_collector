@@ -34,10 +34,57 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import pyarrow.parquet as pq
-from huggingface_hub import hf_hub_download
+import requests
+import time
 
 from src.cfg import Settings
 from src.db import DB
+
+
+HF_BASE = "https://huggingface.co/datasets/ArabicSpeech/ADI17/resolve/main/"
+PARQUET_CACHE = Path("data/adi17_parquet_cache")
+PARQUET_CACHE.mkdir(parents=True, exist_ok=True)
+
+
+def download_parquet_with_resume(remote_path: str, local_path: Path, max_retries: int = 20) -> bool:
+    """Download a Parquet file from HF with resume support and progress logging."""
+    url = HF_BASE + remote_path
+    for attempt in range(max_retries):
+        try:
+            resume_bytes = local_path.stat().st_size if local_path.exists() else 0
+            head = requests.head(url, allow_redirects=True, timeout=30)
+            total = int(head.headers.get("content-length", 0))
+            if resume_bytes >= total and total > 0:
+                return True
+
+            headers = {"Range": f"bytes={resume_bytes}-"} if resume_bytes > 0 else {}
+            print(f"    attempt {attempt+1}: resuming from {resume_bytes/1e6:.0f}/{total/1e6:.0f} MB", flush=True)
+
+            with requests.get(url, headers=headers, stream=True, timeout=(30, 120)) as r:
+                r.raise_for_status()
+                mode = "ab" if resume_bytes > 0 else "wb"
+                got = resume_bytes
+                last_report = time.time()
+                with open(local_path, mode) as f:
+                    for chunk in r.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+                            got += len(chunk)
+                            if time.time() - last_report >= 30:
+                                pct = got / total * 100 if total else 0
+                                print(f"    progress: {got/1e6:.0f}/{total/1e6:.0f} MB ({pct:.0f}%)", flush=True)
+                                last_report = time.time()
+
+            if local_path.stat().st_size >= total and total > 0:
+                print(f"    done: {local_path.stat().st_size/1e6:.0f} MB", flush=True)
+                return True
+
+        except (requests.exceptions.RequestException, OSError) as e:
+            print(f"    attempt {attempt+1} error: {type(e).__name__}: {e}", flush=True)
+            time.sleep(min(2 ** attempt, 30))  # exponential backoff, capped at 30s
+
+    print(f"    FAILED after {max_retries} attempts", flush=True)
+    return False
 
 
 REPO_ID = "ArabicSpeech/ADI17"
@@ -52,7 +99,7 @@ TARGET_DIALECTS = {
     "EGY": "egyptian",
     "MSA": "msa",
     "KSA": "gulf",
-    "KWT": "gulf",
+    "KUW": "gulf",  # ADI17 uses "KUW" not "KWT" for Kuwaiti
     "UAE": "gulf",
     "QAT": "gulf",
     "OMA": "gulf",
@@ -63,6 +110,20 @@ TARGET_PER_DIALECT = 1000  # stop early once we have this many per dialect
 
 OUT_DIR = Path("data/raw_audio")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+PROCESSED_MANIFEST = Path("data/adi17_processed_files.json")
+
+
+def load_processed_files() -> set[str]:
+    if PROCESSED_MANIFEST.exists():
+        return set(json.loads(PROCESSED_MANIFEST.read_text(encoding="utf-8")))
+    return set()
+
+
+def mark_file_processed(fname: str) -> None:
+    done = load_processed_files()
+    done.add(fname)
+    PROCESSED_MANIFEST.write_text(json.dumps(sorted(done), indent=2), encoding="utf-8")
 
 
 def encode_wav_bytes_to_mp3(audio_bytes: bytes, out_path: Path) -> bool:
@@ -206,33 +267,42 @@ def main():
     print(f"Target dialect codes: {list(TARGET_DIALECTS.keys())}\n")
 
     all_files = DEV_FILES + TEST_FILES
-    print(f"Processing {len(all_files)} Parquet files (dev + test splits)")
+    processed = load_processed_files()
+    print(f"Processing {len(all_files)} Parquet files (dev + test splits)", flush=True)
+    print(f"Already processed: {len(processed)} files", flush=True)
 
     for fname in all_files:
+        if fname in processed:
+            print(f"\nSKIP (already processed): {fname}", flush=True)
+            continue
+
         # Stop if all quotas filled
         all_full = all(counts[d] >= TARGET_PER_DIALECT for d in TARGET_DIALECTS)
         if all_full:
-            print("\nAll target dialect quotas filled. Stopping.")
+            print("\nAll target dialect quotas filled. Stopping.", flush=True)
             break
 
-        print(f"\n{'='*60}")
-        print(f"Downloading {fname}...")
-        try:
-            parquet_path = Path(hf_hub_download(REPO_ID, fname, repo_type=REPO_TYPE))
-        except Exception as e:
-            print(f"  Download failed: {e}")
+        print(f"\n{'='*60}", flush=True)
+        print(f"Downloading {fname}...", flush=True)
+
+        local_name = fname.replace("/", "_")
+        local_path = PARQUET_CACHE / local_name
+
+        if not download_parquet_with_resume(fname, local_path):
+            print(f"  Download failed after retries; moving on.", flush=True)
             continue
 
-        stats = process_parquet_file(parquet_path, db, counts)
-        print(f"  Stats: {stats}")
-        print(f"  Running totals: {dict(counts)}")
+        stats = process_parquet_file(local_path, db, counts)
+        print(f"  Stats: {stats}", flush=True)
+        print(f"  Running totals: {dict(counts)}", flush=True)
 
-        # Delete Parquet file to save disk space
+        mark_file_processed(fname)
+
         try:
-            parquet_path.unlink()
-            print(f"  Deleted {parquet_path.name}")
+            local_path.unlink()
+            print(f"  Deleted {local_path.name}", flush=True)
         except Exception as e:
-            print(f"  Failed to delete Parquet: {e}")
+            print(f"  Failed to delete Parquet: {e}", flush=True)
 
     print(f"\n{'='*60}")
     print("DONE")

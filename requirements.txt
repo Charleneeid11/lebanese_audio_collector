@@ -27,6 +27,9 @@ google-api-python-client
 # =========================
 transformers
 torch
+# Day-3 public-system evaluation:
+speechbrain   # Elyadata/ADI-whisper-ADI20 (SpeechBrain Pretrained checkpoint)
+loralib       # Voxlect MMS-LID-256 (lora.Linear used inside MMSWrapper)
 
 # =========================
 # RSS-based discovery (YouTube, Podcasts)
