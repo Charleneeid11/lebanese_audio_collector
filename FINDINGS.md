@@ -1564,3 +1564,33 @@ On the **audio** side, the picture is the opposite: the best public audio system
 
 **Bottom line for the thesis.** The cross-domain Lebanese DID evaluation now spans 12 systems across three families (lexical/text, acoustic/audio, language-ID, hybrid) — 7 in-house, 4 public, 1 free-baseline — all scored on the same held-out 296-item GT with the same protocol and bootstrap-CI machinery. The two highest-AUC rows are both lexical (MARBERTv2 public; V1 embedding-only ours). The highest-AUC acoustic row is the only country-level acoustic model in the comparison (Elyadata). No acoustic system, public or in-house, matches the text systems on this Lebanese binary task at this data scale.
 
+
+
+## 20. LLM-family Evaluation — Gemini Flash Zero-shot and 3-shot
+_Generated 2026-05-21T09:03:20.934001+00:00 by `scripts/25_eval_llm_systems.py`. ROADMAP v2 Day 4._
+
+### 20.1 Systems evaluated
+
+| System | Model | Family | Shots |
+|---|---|---|---|
+| acegpt_7b_zeroshot | `models/AceGPT-7B-chat.Q4_K_M.gguf` | llm | zero-shot |
+| acegpt_7b_3shot | `models/AceGPT-7B-chat.Q4_K_M.gguf` | llm | 3-shot |
+| groq_llama31_8b_zeroshot | `llama-3.1-8b-instant` | llm | zero-shot |
+| groq_llama31_8b_3shot | `llama-3.1-8b-instant` | llm | 3-shot |
+| gemini_flash_lite_zeroshot | `gemini-2.5-flash-lite` | llm | zero-shot |
+
+Prompt design: a system instruction tells the model to decide whether the transcript is in **Lebanese Arabic specifically** (not Syrian/Jordanian/Palestinian Levantine, not Egyptian/Gulf/Maghrebi, not MSA). The model returns strict JSON `{is_lebanese: bool, confidence: float}` with temperature 0. P(Lebanese) is computed as `confidence if is_lebanese else 1.0 - confidence`. 3-shot uses three training-pool examples — one Lebanese, one Egyptian, one Gulf-flavored — picked outside the GT to avoid leakage.
+
+### 20.2 Results on the held-out 296-item GT
+
+| System | Statistics |
+|---|---|
+| acegpt_7b_zeroshot | (missing — system did not complete) |
+| acegpt_7b_3shot | (missing — system did not complete) |
+| groq_llama31_8b_zeroshot | (missing — system did not complete) |
+| groq_llama31_8b_3shot | (missing — system did not complete) |
+| gemini_flash_lite_zeroshot | (missing — system did not complete) |
+
+### 20.3 Interpretation
+
+_(Interpretation pending; this block is regenerated each run. See ROADMAP §4 Day 4 for context.)_
