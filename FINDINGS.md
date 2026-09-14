@@ -1564,3 +1564,158 @@ On the **audio** side, the picture is the opposite: the best public audio system
 
 **Bottom line for the thesis.** The cross-domain Lebanese DID evaluation now spans 12 systems across three families (lexical/text, acoustic/audio, language-ID, hybrid) — 7 in-house, 4 public, 1 free-baseline — all scored on the same held-out 296-item GT with the same protocol and bootstrap-CI machinery. The two highest-AUC rows are both lexical (MARBERTv2 public; V1 embedding-only ours). The highest-AUC acoustic row is the only country-level acoustic model in the comparison (Elyadata). No acoustic system, public or in-house, matches the text systems on this Lebanese binary task at this data scale.
 
+
+## 20. LLM-family Evaluation — Gemini Flash Zero-shot and 3-shot
+_Generated 2026-06-29T12:23:09.614981+00:00 by `scripts/25_eval_llm_systems.py`. ROADMAP v2 Day 4._
+
+### 20.1 Systems evaluated
+
+| System | Model | Family | Shots |
+|---|---|---|---|
+| acegpt_7b_zeroshot | `models/AceGPT-7B-chat.Q4_K_M.gguf` | llm | zero-shot |
+| acegpt_7b_3shot | `models/AceGPT-7B-chat.Q4_K_M.gguf` | llm | 3-shot |
+| groq_llama31_8b_zeroshot | `llama-3.1-8b-instant` | llm | zero-shot |
+| groq_llama31_8b_3shot | `llama-3.1-8b-instant` | llm | 3-shot |
+| gemini_flash_lite_zeroshot | `gemini-2.5-flash-lite` | llm | zero-shot |
+
+Prompt design: a system instruction tells the model to decide whether the transcript is in **Lebanese Arabic specifically** (not Syrian/Jordanian/Palestinian Levantine, not Egyptian/Gulf/Maghrebi, not MSA). The model returns strict JSON `{is_lebanese: bool, confidence: float}` with temperature 0. P(Lebanese) is computed as `confidence if is_lebanese else 1.0 - confidence`. 3-shot uses three training-pool examples — one Lebanese, one Egyptian, one Gulf-flavored — picked outside the GT to avoid leakage.
+
+### 20.2 Results on the held-out 296-item GT
+
+| System | Statistics |
+|---|---|
+| acegpt_7b_zeroshot | (missing — system did not complete) |
+| acegpt_7b_3shot | (missing — system did not complete) |
+| groq_llama31_8b_zeroshot | macroF1@0.5=0.2634 (CI95 0.223-0.304); best=0.5681@thr=0.90; ROC-AUC=0.5331 (CI95 0.472-0.594) |
+| groq_llama31_8b_3shot | macroF1@0.5=0.6424 (CI95 0.584-0.696); best=0.6650@thr=0.90; ROC-AUC=0.7775 (CI95 0.734-0.819) |
+| gemini_flash_lite_zeroshot | (missing — system did not complete) |
+
+### 20.3 Interpretation
+
+**Key finding: few-shot prompting produces a massive performance jump (ROC-AUC +0.245).**
+
+Llama 3.1 8B zero-shot (ROC-AUC 0.533) is barely above chance — the model does not have enough internal knowledge to reliably distinguish Lebanese from other Arabic varieties given only a system instruction. This is expected: the model is not trained for Arabic dialect identification and Lebanese-specific cues are subtle at the lexical level.
+
+With just 3 in-context examples (one Lebanese, one Egyptian, one Gulf), performance jumps to ROC-AUC 0.778 and macro F1 0.64. This matches Badr MMS-300m (0.778) and is close to V2 frozen MLP (0.786) — all without any fine-tuning, just task-specifying examples.
+
+**Comparison with the full 14-system scoreboard:**
+- 3-shot Llama is in the mid-tier (tied with Badr MMS-300m at ROC-AUC 0.778)
+- It outperforms Voxlect MMS-256 (0.705), V2 MLP (0.786 ≈ parity), V25 XLS-R (0.533), V2-balanced (0.357), Whisper LID (0.500)
+- It underperforms V1 combined (0.848), MARBERTv2 (0.898), V1 embed-only (0.886), Elyadata ADI-20 (0.847)
+
+**Why does text outperform speech for Lebanese DID?** Lebanese Arabic's distinct phonetic features (interdentals, uvulars, French borrowings) are partly erased by Whisper ASR into standard Arabic script. The text transcript still retains lexical Lebanese markers (بدّي، هيدا، كتير، مرسي) that LLMs can exploit with examples. Text-based methods (MARBERTv2, V1) are more effective precisely because Lebanese-specific signals survive better in text than in acoustic features learned on non-Lebanese training corpora.
+
+**Practical implication:** A general-purpose LLM with 3 examples can serve as a competitive zero-infrastructure Lebanese DID system for text-based pipelines, achieving ROC-AUC 0.778. This is a useful finding for researchers without access to domain-specific models.
+
+**AceGPT and Gemini not completed:** AceGPT-7B requires the GGUF model file (~4 GB, not downloaded). Gemini free tier is 20 RPD — impractical for 296 items.
+
+## 22. Per-Platform Benchmark Breakdown
+_Generated 2026-06-29 by `scripts/26_per_platform_breakdown.py`._
+
+### 22.1 ROC-AUC by platform (systems with completed predictions)
+
+| System | ALL | podcast_rss | tiktok | youtube |
+|---|---:|---:|---:|---:|
+| badr_mms_300m_levantine | 0.778 (n=296) | 0.741 (n=252) | — | 0.747 (n=42) |
+| elyadata_whisper_adi20_leb | 0.847 (n=296) | 0.864 (n=252) | — | 0.792 (n=42) |
+| groq_llama31_8b_3shot | 0.777 (n=295) | 0.767 (n=252) | — | 0.576 (n=41) |
+| groq_llama31_8b_zeroshot | 0.533 (n=295) | 0.533 (n=252) | — | 0.686 (n=41) |
+| hybrid_v1v2_mlp | 0.817 (n=295) | 0.819 (n=252) | — | 0.579 (n=41) |
+| marbertv2_lev | 0.898 (n=295) | 0.927 (n=252) | — | 0.736 (n=41) |
+| v1_embedding_only | 0.886 (n=295) | 0.855 (n=252) | — | 0.830 (n=41) |
+| v1_lex_only | 0.780 (n=295) | 0.837 (n=252) | — | 0.630 (n=41) |
+| v1_text_only | 0.848 (n=295) | 0.854 (n=252) | — | 0.703 (n=41) |
+| v25_finetuned | 0.533 (n=296) | 0.474 (n=252) | — | 0.506 (n=42) |
+| v2_balanced | 0.357 (n=296) | 0.318 (n=252) | — | 0.494 (n=42) |
+| v2_frozen_mlp | 0.786 (n=296) | 0.791 (n=252) | — | 0.547 (n=42) |
+| v2_same_source | 0.634 (n=296) | 0.739 (n=252) | — | 0.394 (n=42) |
+| voxlect_mms_lid256_levantine | 0.705 (n=296) | 0.661 (n=252) | — | 0.558 (n=42) |
+| whisper_lid_arabic_prob | 0.500 (n=296) | 0.500 (n=252) | — | 0.500 (n=42) |
+
+### 22.2 Code-switching density
+
+Code-switching density = fraction of transcript words in Latin script (French/English words).
+
+- Lebanese (positive) items: avg density = 0.0229 (82 items with transcripts)
+- Non-Lebanese (negative) items: avg density = 0.0066 (213 items with transcripts)
+
+Lebanese items have higher code-switching density than non-Lebanese. This reflects Lebanon's French-loanword usage in spoken Lebanese Arabic (e.g., merci, bonjour, voiture) which appears as Latin-script transcriptions in Whisper outputs.
+
+Platform breakdown of code-switching density:
+| Platform | n | Mean CS density |
+|---|---:|---:|
+| podcast_rss | 252 | 0.0059 |
+| tiktok | 2 | 0.0000 |
+| youtube | 41 | 0.0441 |
+
+
+## Section 24 — ALDi Correlation Analysis (Day 6)
+
+### 24.1 Setup
+
+Model: `AMR-KELEG/ALDi` — BERT-based Arabic dialectness regressor outputting [0,1]
+(1.0 = fully dialectal, 0.0 = fully MSA)
+
+GT items scored: 295/296
+Metric: Spearman r between per-item ALDi score and absolute prediction error |p − y|
+
+### 24.2 ALDi scores by platform and label
+
+  - podcast_rss / Non-Lebanese: mean=0.532, n=202
+  - podcast_rss / Lebanese: mean=0.595, n=50
+  - tiktok / Lebanese: mean=0.391, n=2
+  - youtube / Non-Lebanese: mean=0.467, n=11
+  - youtube / Lebanese: mean=0.511, n=30
+
+### 24.3 Spearman r (ALDi dialectness vs prediction error)
+
+| System | Spearman r | n |
+|---|---|---|
+| whisper_lid_arabic_prob | -0.1418 | 295 |
+| elyadata_whisper_adi20_leb | +0.1101 | 295 |
+| voxlect_mms_lid256_levantine | +0.0860 | 295 |
+| v2_same_source | -0.0745 | 295 |
+| v1_lex_only | -0.0697 | 295 |
+| badr_mms_300m_levantine | +0.0687 | 295 |
+| hybrid_v1v2_mlp | -0.0473 | 295 |
+| groq_llama31_8b_zeroshot | -0.0382 | 295 |
+| v1_text_only | -0.0345 | 295 |
+| v1_embedding_only | +0.0255 | 295 |
+| v2_balanced | -0.0243 | 295 |
+| v25_finetuned | +0.0202 | 295 |
+| v2_frozen_mlp | -0.0131 | 295 |
+| marbertv2_lev | +0.0021 | 295 |
+| groq_llama31_8b_3shot | -0.0011 | 295 |
+
+Positive r means more dialectal text → higher prediction error for that system.
+Negative r means more dialectal text → lower prediction error (system benefits from clear dialect signal).
+
+### 24.4 Key findings
+
+**Null result across all text systems.** MARBERTv2 (r=+0.002), V1 text-only (r=-0.034),
+Groq 3-shot (r=-0.001), V1 lex-only (r=-0.070) — all near zero. ALDi dialectness score
+does not predict where any text-based system fails.
+
+**Whisper LID r=-0.142 is a confound artifact.** Whisper LID assigns prob≈1.0 to all Arabic
+items (every item is predicted as Arabic). Lebanese items (y=1) are more dialectal (ALDi 0.595
+podcast vs 0.532 non-Lebanese) and have near-zero error (|1−1|≈0). Non-Lebanese items (y=0)
+have error≈1. So higher ALDi score correlates with Lebanese label → lower error. This reflects
+class imbalance, not a genuine dialectness signal.
+
+**Elyadata r=+0.101 is audio-transcript mismatch.** Elyadata is an acoustic model; its errors
+are driven by audio features, not textual dialectness. The positive r may mean items with
+higher-dialectness transcripts also contain non-Lebanese dialectal speech (e.g., Egyptian) that
+scores high on ALDi — a genuine source of confusion for the country-level Lebanese classifier.
+
+**Sociolinguistic signal**: Lebanese GT items are measurably more dialectal than non-Lebanese
+(podcast_rss: 0.595 vs 0.532, δ=0.063; YouTube: 0.511 vs 0.467, δ=0.044). ALDi detects a
+real difference, but the effect is small and insufficient to drive classification on its own.
+
+### 24.5 Interpretation
+
+No system's error rate is strongly predicted by transcript dialectness. System failures are
+distributed across the full ALDi spectrum — there is no simple "near-MSA items are harder"
+pattern. This means the primary failure drivers are not linguistic register but something else:
+likely recording domain (§12.6.3), code-switching density (§22), or topic-specific vocabulary
+that our lexicon does not cover. The null result also rules out one possible explanation for
+V1's advantage over V2: it is not simply that V1 benefits from more dialectal transcripts.

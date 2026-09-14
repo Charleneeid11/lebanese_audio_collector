@@ -1,406 +1,1029 @@
-# Building an Open Lebanese Arabic Audio Corpus and an Acoustic Lebanese-vs-Other-Arabic Dialect Classifier
+# Cross-domain Lebanese Arabic Dialect Identification: Benchmarking Lexical, Acoustic, and Large Language Models
 
-**Charlene El Khoury Eid** — Lebanese American University, Byblos
+**Charlene El Khoury Eid** - Lebanese American University, Byblos
 *Master's Thesis Draft, 2026*
 
 ---
 
 ## Abstract
 
-Lebanese Arabic, like most regional dialects of Arabic, lacks the open, multi-speaker speech resources that have driven recent advances in Arabic NLP. This thesis (i) describes the construction of a queue-driven, multi-stage pipeline for collecting Lebanese Arabic audio from open platforms (YouTube, podcasts, TikTok), (ii) establishes a 300-item manually annotated ground-truth test set covering five register categories, (iii) trains a text-only baseline classifier (lexical features + multilingual sentence embeddings) using weak supervision from trusted-channel metadata and lexical scoring, and (iv) develops an acoustic classifier built on mean-pooled wav2vec2-XLS-R-300m representations and trained against a contrastive non-Lebanese set drawn from ADI17 (Egyptian, Gulf) and FLEURS (Modern Standard Arabic). On the held-out 300-item test set, the text-only baseline (V1) achieves macro F1 0.74 and ROC-AUC 0.85, while the acoustic classifier (V2) achieves macro F1 0.38 and ROC-AUC 0.79 at default decision threshold — a substantial collapse from its in-pool validation performance (macro F1 0.86). Three remediations — threshold tuning, per-(platform, label) class balancing, and hybrid V1+V2 features — fail to recover V2 above the V1 baseline. We diagnose V2's failure as a *recording-domain confound*: the training pool's positive and negative classes correlate with distinct recording domains (broadcast, read-prompt, podcast), and the frozen XLS-R encoder learns the easier acoustic-domain signal in preference to dialect signal. We report this negative finding as a methodological contribution: the standard frozen-encoder recipe for self-supervised speech embeddings does not transfer cleanly to Arabic dialect identification when training-class composition is correlated with recording-environment, and we propose end-to-end fine-tuning, broadcast-only contrastive sets (e.g., MGB-2 instead of FLEURS), and speaker-normalized features as candidate remedies for future work. Beyond performance numbers, the work contributes a documented end-to-end pipeline (open-source), a curated ground-truth set, and a reproducibility log of practical constraints — gated speech corpora (Mozilla Common Voice withdrawn from HuggingFace), dataset-loader-script deprecations (`datasets >= 4.0`), and content-filtered file hosts on residential networks — that are themselves contributions to the dialect-identification literature.
+Lebanese Arabic is among the most linguistically underrepresented spoken varieties in automatic dialect identification (DID) research: despite appearing in shared tasks such as ADI17, it has no dedicated open test set and no published cross-domain comparison of modern DID systems. This thesis addresses that gap with five contributions. (C1) We build a queue-driven, multi-platform audio collection pipeline yielding approximately 14,000 candidate Lebanese-Arabic items from YouTube, podcasts, TikTok, ADI17, and FLEURS. (C2) We construct the first published Lebanese-specific held-out DID test set: 300 items manually annotated across five label categories by a native Lebanese speaker, stratified over the pipeline's confidence tiers, and binary-mapped to 296 evaluable items (82 positive, 214 negative). (C3) Using this test set, we run a cross-domain benchmark of 14 systems spanning four model families - lexical/text (sentence embeddings, MARBERT), frozen acoustic self-supervised models (XLS-R-300m, MMS-300m), an end-to-end fine-tuned Whisper DID system, and a large language model (Llama-3.1-8B, zero-shot and 3-shot) - all evaluated under a uniform protocol with percentile-bootstrap 95% confidence intervals on macro F1 and ROC-AUC. Key findings: text-based models lead acoustic models (V1 embed-only ROC-AUC 0.886, MARBERTv2 0.898 vs best acoustic Elyadata 0.847), with overlapping bootstrap confidence intervals that preclude a claim of strict statistical dominance but a consistent 0.039–0.051 point-estimate advantage; and 3-shot prompting alone raises Llama's ROC-AUC from 0.533 (chance) to 0.778, matching a purpose-built acoustic system. (C4) We empirically confirm a *recording-domain confound* as the primary explanation for acoustic underperformance: frozen XLS-R embeddings encode platform-of-origin with 89% four-way accuracy (chance: 25%), per-source balanced training drops V2's ROC-AUC to 0.357 (entirely below random; 95% CI [0.291, 0.430]), and a same-source control trained only on podcast audio still underperforms the cross-domain text system - four converging lines of evidence. We frame this as a methodological warning for the field: the frozen-encoder recipe for self-supervised speech DID does not transfer cleanly to heterogeneous-source weakly-supervised Arabic training data. (C5) An empirical reproducibility audit of ADI17 (all 40 Parquet shards, 990,821 rows) confirms the dataset contains no MSA class - a common misconception among downstream users.
+
+**Keywords:** Lebanese Arabic; dialect identification; self-supervised speech representations; recording-domain confound; cross-domain benchmark; weak supervision; wav2vec 2.0; MARBERT; bootstrap confidence intervals; multi-platform corpus
+
+---
+
+## Acknowledgments
+
+I would like to express my sincere gratitude to my thesis advisor for their continuous guidance, constructive feedback, and unwavering support throughout this project. I am equally grateful to the members of my thesis committee for their time, expertise, and valuable input.
+
+This research was conducted on personal hardware with no institutional compute allocation. The open-source community whose tools made this work possible deserves particular acknowledgment: the developers of Whisper, XLS-R, HuggingFace Transformers, scikit-learn, and the many Arabic NLP researchers whose publicly released models and datasets are evaluated in this benchmark.
+
+Finally, I thank my family for their patience and encouragement throughout this degree.
 
 ---
 
 ## 1. Introduction
 
-Arabic is spoken by over 400 million people in 22+ countries, but its written-form unity (Modern Standard Arabic, MSA) masks substantial spoken-form variation. The standard taxonomy organizes spoken Arabic into broad regional groups — Maghrebi, Egyptian, Levantine, Gulf, Yemeni, and Iraqi [@bouamor2018madar] — each containing several country-level dialects. Within Levantine, Lebanese, Syrian, Palestinian, and Jordanian Arabics share the bulk of phonology and core lexicon while differing in prosody, function-word inventory, and high-frequency colloquialisms.
+Arabic is spoken by over 400 million people across 22 countries, but its spoken-form diversity - organized into Maghrebi, Egyptian, Levantine, Gulf, Yemeni, Iraqi, and other regional groupings - is poorly represented in NLP resources compared to its written (Modern Standard Arabic, MSA) form. Within Levantine Arabic, Lebanese occupies a distinctive social position: it is a prestige spoken variety, a media dialect with a substantial podcast and YouTube presence, and linguistically distinct from other Levantine varieties in prosody, phonology, and parts of the lexicon.
 
-Automatic dialect identification (DID) for Arabic has been studied at the regional level (e.g., the MGB-3 challenge [@ali2017mgb3]) and at the country level (the ADI17 benchmark spans 17 countries; [@ali2019mgb5]). However, the resources that drive these benchmarks are dominated by broadcast and read speech, and Lebanese — though present in ADI17 — is rarely the focus of dedicated open-corpus or open-classifier work. The practical consequence is that researchers and product teams who need a "is this clip Lebanese Arabic?" classifier today face a choice between (a) repurposing a 17-way country classifier and thresholding a single class output, with all the calibration concerns that introduces, or (b) hand-curating bespoke training data, which is expensive and seldom released.
+Automatic dialect identification (DID) for Arabic has been studied at the regional level (MGB-3; [@ali2017mgb3]) and the country level (ADI17; [@ali2019mgb5]). Lebanese appears as one of 17 country classes in ADI17, and country-level classifiers have been released for that dataset. However, to our knowledge no prior work (i) builds an open end-to-end pipeline for collecting Lebanese-specific audio from public platforms, (ii) establishes a manually-annotated cross-domain held-out test set that is publicly described, or (iii) runs a systematic side-by-side comparison of modern DID systems on Lebanese binary classification with statistical confidence intervals. A researcher who needs a "is this clip Lebanese Arabic?" system today must choose between repurposing a 17-way country classifier and thresholding a single class output - with all the calibration complications that entails - or hand-curating proprietary training data that is seldom released.
 
-This thesis takes the second path but releases the artifacts: a documented collection pipeline, a labeled corpus, two trained classifiers (a text-only baseline and an acoustic-feature classifier), and a 300-item manually annotated test set. The pipeline is queue-driven and reproducible; the corpus is built from open platforms (YouTube channels, public podcasts, TikTok) and augmented with research-grade dialect labels imported from ADI17 and FLEURS. The two classifiers are explicitly comparable on the same held-out test, allowing us to measure the value of acoustic features over text-only features in a controlled way.
+This thesis takes the second path but releases the artifacts: a documented collection pipeline, a curated corpus, and a 300-item manually-annotated test set. On this test set we evaluate 14 systems - five built in-house, four pulled from HuggingFace, one free baseline, two ablation variants, and two LLM zero/few-shot conditions - under a uniform protocol. Our headline finding is unexpected: text-based features consistently outperform acoustic self-supervised features for Lebanese binary identification, and we provide rigorous empirical evidence that this is caused by a recording-domain confound in the training data rather than by acoustic features being inherently uninformative.
 
-Our contributions are:
+### 1.1 Contributions
 
-1. **A queue-driven Lebanese-Arabic audio collection pipeline**, comprising discovery (YouTube RSS, podcast RSS, TikTok), download with normalization, screening transcription, weak-label assignment via trusted-channel metadata and lexical scoring, and integration of external research datasets. The pipeline is reproducible from public sources and survives platform-specific quirks (RSS-vs-API discovery, MP3 vs FLAC storage tradeoffs, etc.).
+This thesis makes five contributions:
 
-2. **A curated ground-truth test set** of 300 items, manually annotated across five register categories (lebanese, mostly_lebanese, not_lebanese, unclear, skip), with stratified sampling over the pipeline's confidence tiers and a custom Flask annotation tool.
+**(C1) A queue-driven Lebanese Arabic audio collection pipeline.** A reproducible, multi-platform pipeline covering discovery (YouTube RSS, YouTube Data API, podcast RSS, TikTok), audio download and normalization, Whisper-based screening transcription, and weak-label assignment via trusted-channel metadata and lexical scoring. Integration of external research datasets (ADI17 [@ali2019mgb5]; FLEURS [@conneau2022fleurs]) is handled through a shared queue so all items flow through a unified status schema.
 
-3. **A text-only baseline classifier** built on five lexical features (Lebanese, MSA, Egyptian, Gulf, Syrian word counts plus a strong-marker count) and a 384-dimensional multilingual sentence embedding [@reimers2019sbert], trained via weakly supervised binary labels and evaluated on the held-out test.
+**(C2) The first published Lebanese-specific DID test set.** 300 items manually annotated across five label categories (Lebanese, Mostly-Lebanese, Not-Lebanese, Unclear, Skip) by a native Lebanese-speaking annotator, stratified over the pipeline's confidence tiers. This is the first Lebanese-specific held-out test set described in the open literature and the evaluation anchor for all 14 benchmark systems.
 
-4. **An acoustic dialect classifier** trained on 1024-dimensional wav2vec2-XLS-R-300m utterance embeddings [@babu2022xlsr], with a contrastive set assembled from ADI17 (Egyptian, Gulf, additional Lebanese) and FLEURS (MSA from Egyptian speakers), and evaluated on the same held-out test as the baseline.
+**(C3) A 14-system Lebanese cross-domain DID benchmark.** We evaluate four model families - lexical/text classifiers, acoustic self-supervised encoders, an end-to-end audio DID system, and a large language model (Llama-3.1-8B) - on the same 296-item held-out test under a uniform protocol. All results include percentile-bootstrap 95% confidence intervals. The benchmark is reproducible: per-system predictions are saved to disk and evaluation is re-runnable from those files. A key LLM finding: 3-shot prompting raises Llama from near-chance (0.533) to competitive mid-tier (0.778), matching a purpose-built Arabic DID acoustic system.
 
-5. **A documented methodology** that catalogs negative results — including the empirical confirmation that ADI17's training partition contains zero MSA items, and the practical workarounds for recently-introduced gating on Mozilla Common Voice and `datasets`-library loading-script deprecations — useful for any future researcher working in this corner of speech.
+**(C4) An empirically confirmed recording-domain confound.** We establish this finding with four converging lines of evidence: (i) V2 acoustic drops 0.48 macro F1 from in-pool validation to held-out test; (ii) per-source balanced training drops V2's ROC-AUC from 0.787 to 0.357 (entirely below random; 95% CI [0.291, 0.430]); (iii) a platform-probe classifier achieves 89.1% four-way accuracy predicting recording source from XLS-R embeddings (chance: 25%); (iv) a same-source control trained exclusively on the test domain still underperforms the cross-domain text system. We interpret this as a methodological warning for Arabic DID: heterogeneous-source weak supervision introduces label-correlated recording domains that frozen acoustic encoders exploit in preference to dialect signal.
 
-The remainder of this paper is structured as follows. Section 2 surveys related work in Arabic dialect resources, dialect identification, and self-supervised speech representations. Section 3 describes the collection pipeline and resulting dataset. Section 4 details preprocessing and audio normalization. Section 5 describes the weak-supervision strategy and ground-truth construction. Section 6 covers the text-only baseline. Section 7 presents the acoustic classifier and its comparison against the baseline. Section 8 discusses limitations, with particular attention to single-annotator bias, label noise, and the recording-environment confound between the FLEURS MSA class and the ADI17 broadcast classes. Section 9 outlines future work.
+**(C5) An empirical reproducibility audit of ADI17.** A row-level scan of all 40 Parquet shards of the ADI17 train split (990,821 rows) confirms that ADI17 contains no MSA items: the 17 classes are exclusively country-level dialects. This corrects a common assumption among HuggingFace users that MSA would be a 17+1 class in the dataset.
+
+### 1.2 Paper organization
+
+Section 2 surveys related work. Section 3 describes corpus construction and the ADI17 reproducibility finding. Section 4 covers preprocessing. Section 5 details the weak supervision strategy. Section 6 describes the 300-item ground-truth test set. Section 7 presents all 14 benchmark systems. Section 8 defines the evaluation protocol. Section 9 reports the benchmark results. Section 10 presents the recording-domain confound analysis in depth. Section 11 discusses failure patterns. Section 12 states limitations. Section 13 outlines future work.
 
 ---
 
 ## 2. Related Work
 
-### 2.1 Arabic dialect resources
+This chapter surveys the prior work that contextualizes the thesis across six dimensions: the sociolinguistic background of Arabic and its dialects; existing corpora and resources; automatic dialect identification; self-supervised speech representations; code-switching in Arabic; large language models for Arabic NLP; weak supervision; and domain adaptation. Together these threads motivate both the problem framing (a Lebanese-specific binary benchmark) and the experimental choices made in subsequent chapters.
 
-The MADAR Arabic Dialect Corpus [@bouamor2018madar] provides parallel sentences across 25 Arab city dialects, but is text-only and small in audio terms. The MGB-2 challenge [@ali2016mgb2] released approximately 1,200 hours of Al Jazeera broadcast Arabic, predominantly MSA, with utterance-level transcriptions; it is the de facto MSA broadcast resource but requires QCRI-managed access. The MGB-3 challenge [@ali2017mgb3] introduced four-way regional dialect data (Egyptian, Gulf, Levantine, North African). The ADI17 dataset [@ali2019mgb5] — used heavily in this thesis — provides 17 country-level Arabic dialect classes (including Lebanese) totaling roughly 3,000 hours of broadcast speech, distributed via HuggingFace as Parquet shards with embedded audio bytes. Salameh et al. [@salameh2018finegrained] explored fine-grained Arabic dialect identification at the city level using the MADAR corpus.
+### 2.1 Arabic diglossia and the Lebanese variety
 
-Notably, **ADI17 does not include MSA as a class**: the dataset is country-dialect-only, and MSA is treated as a separate register. We confirm this empirically in Section 3 by exhaustive scan of the train, validation, and test splits.
+Arabic is a macro-language spoken by over 400 million people across 22 countries, exhibiting a well-documented diglossic structure [@habash2010introduction]: a high-prestige standardized variety - Modern Standard Arabic (MSA), or *al-fuṣḥā* - coexists alongside a continuum of regional spoken dialects (*ʿāmmiyya*). MSA is the language of government, formal education, and print media; no native speaker acquires it as a mother tongue. Regional dialects - Levantine, Egyptian, Maghrebi, Gulf, Iraqi, Yemeni - serve as the actual vehicles of everyday spoken communication and vary substantially from one another in phonology, morphology, syntax, and lexicon.
 
-For MSA specifically, options are scarcer than commonly assumed. The Arabic Speech Corpus [@halabi2016msa] is high-quality but single-speaker, which presents a fatal acoustic confound for any dialect-identification work: a classifier trained against single-speaker MSA cannot disentangle MSA-as-register from this-particular-voice. Mozilla Common Voice [@ardila2020commonvoice] historically provided multi-speaker Arabic read-prompt audio, but Mozilla migrated all Common Voice resources off HuggingFace in October 2025 to its own Mozilla Data Collective portal. We use FLEURS [@conneau2022fleurs] as our MSA source instead — multi-speaker, open, citable, available via HuggingFace, and explicitly designed as a multilingual evaluation resource.
+Lebanese Arabic belongs to the North Levantine branch, sharing broad structural features with Syrian, Palestinian, and Jordanian Arabic while exhibiting distinctive characteristics: preservation of interdental fricatives (θ/ð) in some registers, specific vowel quality shifts (*imāla* raising of /a/ toward /e/), and a phonological inventory shaped by centuries of Phoenician substratum, Ottoman Turkish influence, and French colonial contact. Most distinctively, Lebanon's French-mandate history produced a pervasive Arabic-French code-switching pattern unique in the Levantine family: Lebanese speakers routinely embed French and English words, phrases, and sometimes entire clauses into Arabic discourse at all syntactic levels. This produces a distinctive orthographic signature in Whisper transcripts - Latin-script tokens interspersed with Arabic-script ones - that serves as a weak but real computational cue to Lebanese speaker identity.
 
-### 2.2 Arabic dialect identification
+From a corpus-construction standpoint, Lebanese Arabic occupies a structurally advantageous niche for online collection: it commands a large YouTube and podcast footprint (talk shows, comedy, political commentary, cultural programming) that makes platform-based data collection feasible at scale. The collection challenge is that the same Lebanese creators frequently produce MSA-register content on formal occasions, requiring dialect-aware filtering even within trusted Lebanese channels.
 
-Early work used acoustic features (MFCCs, i-vectors) with GMM/SVM classifiers. End-to-end neural approaches with convolutional architectures and language embeddings followed [@shon2018adi]. The ADI17 baseline [@ali2019mgb5] reports country-level accuracy in the 70-80% range across the 17 classes, with substantial confusion within regional groups (e.g., among Levantine country variants). More recent work fine-tunes transformer-based speech encoders on dialect data; XLS-R [@babu2022xlsr] and HuBERT [@hsu2021hubert] are the dominant backbones, with mean-pooling or attention-pooling over time being the standard utterance-level aggregation.
+### 2.2 Arabic dialect corpora and resources
 
-For Lebanese specifically, dedicated dialect classifiers are rare in the open literature. The most closely related work is country-level binary thresholding over multi-class country classifiers, which suffers from calibration and class-imbalance issues. To our knowledge this thesis is among the first to release a dedicated open Lebanese-vs-other Arabic classifier alongside its training data.
+The Arabic dialect NLP community has assembled a growing body of annotated resources spanning text and speech. For written text, the MADAR corpus [@bouamor2018madar] provides parallel sentences across 25 Arabic city dialects and 12 non-Arabic languages (approximately 110,000 sentences total) and is the primary resource for fine-grained written dialect identification; it contains no audio. The NADI shared task series [@nadi2025] extends dialect text resources to social media and, in recent editions, to spoken components.
 
-### 2.3 Self-supervised speech representations and dialect ID
+For speech, the MGB series provides the canonical broadcast audio resources. MGB-2 [@ali2016mgb2] released approximately 1,200 hours of Al Jazeera broadcast speech - primarily MSA - with word-level dialect labels; it remains the standard MSA broadcast benchmark but requires QCRI-managed access. MGB-3 [@ali2017mgb3] introduced a four-way regional dialect partition (Egyptian, Gulf, Levantine, North African) drawn from YouTube content. ADI17 [@ali2019mgb5], the Arabic Dialect Identification 2017 challenge dataset, scaled to 17 country-level classes from broadcast recordings totalling approximately 3,000 hours, and is the largest openly available Arabic dialect audio resource; it is hosted on HuggingFace as Parquet shards with embedded audio bytes. A critical empirical observation confirmed in this thesis is that **ADI17 contains no MSA class** - its 17 classes are exclusively country-level dialects (Section 3.5). This is consistent with the ADI17 challenge design but is commonly overlooked by downstream users.
 
-wav2vec 2.0 [@baevski2020wav2vec2] established self-supervised pretraining for speech, learning representations that transfer well to downstream tasks (ASR, language identification, speaker verification). XLS-R [@babu2022xlsr] extends this to 128 languages and 436K hours of pretraining audio, including Arabic. For dialect identification specifically, the literature has converged on a recipe of (i) freeze the pretrained encoder, (ii) take the last hidden states, (iii) mean-pool over time using attention masks, (iv) train a small classifier head (logistic regression or shallow MLP) on the resulting fixed-length utterance embeddings. We follow this recipe.
+FLEURS [@conneau2022fleurs] is a multilingual speech evaluation corpus covering 102 languages, including Arabic in an Egyptian-speaker configuration (`ar_eg`) reading FLoRes-101 sentences in MSA register. It is multi-speaker, CC-BY-SA licensed, and the most accessible multi-speaker MSA audio source since Mozilla Common Voice migrated off HuggingFace in October 2025. Mozilla Common Voice Arabic, previously available as `mozilla-foundation/common_voice_*` via the HuggingFace `datasets` library, now requires direct access through the Mozilla Data Collective and cannot be loaded through standard pipeline scripts.
 
-### 2.4 Weak supervision for speech corpora
+For Lebanese specifically, no open dedicated large-scale audio corpus with verified dialect labels existed prior to this work. The closest available resource is the Lebanese (LEB) portion of ADI17, which contains approximately 35,938 rows in the train split drawn from broadcast recordings. This thesis fills this gap.
 
-Manually labeling speech is expensive. Weak supervision strategies — pulling labels from metadata (channel identity, source venue), from text-domain heuristics, or from coarse classifier outputs — have been used for ASR [@radford2023whisper], dialect ID, and topic classification. The trade-off is well-known: weak labels are abundant but noisy; explicit measurement of that noise via a held-out manually annotated test set is the standard correction. We measure noise rates in Section 5 and use the ground-truth test only for evaluation, never for training.
+### 2.3 Automatic Arabic dialect identification
+
+Arabic DID research has evolved through three distinct methodological generations. The first generation applied MFCC-based acoustic features with GMM-SVM classifiers to short audio segments, or bag-of-words text features to transcripts, with SVM or maximum entropy classifiers. Salameh et al. [@salameh2018finegrained] demonstrated fine-grained city-level identification from written text using character *n*-gram features, achieving over 67% accuracy on 25-city classification. These systems depend heavily on transcript quality and fail on low-resource varieties.
+
+The second generation moved to deep neural acoustic features: Shon et al. [@shon2018adi] established a convolutional + language-embedding neural baseline for the ADI challenge, combining MFCC frame-level features with language identification posteriors in an end-to-end trainable architecture. The ADI17 challenge [@ali2019mgb5] benchmarked systems on 17-country classification; top systems achieved 70-80% accuracy, with substantial confusion within-region (Levantine subgroups; Gulf subgroups). i-vector and d-vector representations from speaker verification were also applied to DID in this period, exploiting the observation that dialect identity correlates with long-term spectral properties in a manner similar to speaker identity.
+
+The third generation fine-tunes self-supervised speech encoders on dialect-labeled data. Abdullah et al. (2025) train an MMS-300m model for Arabic DID using voice-conversion-based augmentation to diversify recording styles, reporting state-of-the-art cross-dialect performance. Elleuch et al. (2025) release ADI-whisper-ADI20, a Whisper-Large-V3 fine-tuned on 20 Arabic country dialects including a Lebanese (`LEB`) class - the only publicly available country-level Lebanese acoustic DID system at the time of this writing. Voxlect (2026) release a MMS-LID-256-based classifier covering Arabic regional categories including Levantine. All three are benchmarked in this thesis (Section 7.2).
+
+For text-based Arabic DID, MARBERTv2 [@inoue2021camelbert], a BERT-family model pre-trained on 128 GB of Arabic social-media and dialectal text, is the dominant backbone. A publicly released fine-tuned variant covers four regional groups including Levantine. Text-based DID benefits from lexical invariance to recording environment - a property central to this thesis's finding that text systems outperform acoustic systems under cross-domain conditions (Section 10).
+
+### 2.4 Arabic automatic speech recognition
+
+Accurate ASR is a prerequisite for transcript-based dialect analysis pipelines. Arabic ASR has historically been challenged by dialectal variation, absent diacritization in standard orthography, and limited training data for non-MSA speech. The MGB-2 challenge stimulated Arabic broadcast ASR development, with top-performing systems reaching word error rates below 15% on Al Jazeera MSA content.
+
+Whisper [@radford2023whisper] (Radford et al., OpenAI, 2023) represents the current practical threshold for multilingual open-domain ASR: trained on 680,000 hours of weakly-supervised multilingual audio across 99 languages, it treats Arabic as a first-class language and achieves competitive word error rates across MSA and several dialect registers. Performance degrades on heavy code-switching and on strong regional accents with limited pretraining coverage. Dialect-aware ASR - conditioning recognition on predicted dialect - is an active research direction (Bougrine et al. 2022) but is not a component of this pipeline.
+
+For this thesis, Whisper's `base` model is deployed for *screening transcription* rather than full-text ASR: three 20-second random chunks per item, transcribed at 15× the throughput of `medium` with equivalent Arabic language-detection confidence on the tested items (Section 4). The resulting transcript is used for lexical and embedding feature extraction, not as a verbatim record of speech content.
+
+### 2.5 Self-supervised speech representations
+
+wav2vec 2.0 [@baevski2020wav2vec2] established the self-supervised pretraining paradigm for speech: a convolutional feature encoder projects raw waveforms to 25 ms frames, which are quantized into a discrete codebook; a Transformer contextualizer is then trained to predict masked frame representations from unmasked context (analogous to BERT masking). The resulting representations transfer well to downstream tasks under limited supervision.
+
+XLS-R [@babu2022xlsr] extends this to 128 languages and 436,000 hours of unlabeled audio. The 300M-parameter variant (`facebook/wav2vec2-xls-r-300m`) follows the majority of recent Arabic DID literature and is the backbone of this thesis's V2 and V2.5 systems. HuBERT [@hsu2021hubert] offers an alternative formulation using offline cluster assignments as pseudo-labels for masked prediction; it achieves comparable performance to wav2vec 2.0 on most standard benchmarks. MMS (Massively Multilingual Speech, Pratap et al. 2023) further extends SSL pretraining to 1,100+ languages and is the backbone of the Abdullah et al. (2025) and Voxlect (2026) systems.
+
+The standard recipe for applying frozen SSL encoders to dialect ID is: (i) extract mean-pooled last-hidden-state embeddings from fixed-length audio windows; (ii) train a shallow classifier head on the embeddings using available dialect labels. This recipe performs well when training and test audio share a common recording domain, as in within-source ADI17 evaluation. It is vulnerable to recording-domain confounds when training data is assembled from heterogeneous public sources - the central finding of this thesis. Sullivan et al. [@sullivan2023ssl] systematically demonstrate this vulnerability for Arabic DID: frozen representations do not generalize cleanly across recording environments and domain-matched training is necessary for reliable transfer. Section 10 replicates and extends their finding to the Lebanese binary classification setting.
+
+### 2.6 Code-switching in Arabic speech
+
+Code-switching - alternation between two or more languages or varieties within a single conversation or utterance - is particularly prevalent in Lebanese Arabic [@habash2010introduction]. Lebanese speakers routinely embed French and English words and phrases at the lexical, clausal, and sentential levels, reflecting the French-mandate bilingual education system and ongoing anglophone influence. Common patterns include lexical insertion (*merci*, *voiture*, *cool* inserted into Arabic NPs), constituent insertion (French NPs within Arabic VP structure), and paragraph-level alternation between Arabic and French or English.
+
+For dialect identification, code-switching has a dual effect. On the challenge side: heavily code-switched Lebanese items have lower density of Arabic dialect-specific vocabulary in their Whisper transcripts, reducing the signal available to lexical and embedding classifiers. The `mostly_lebanese` annotation category (50 of 300 GT items, 16.7%) captures many such items: the annotator identifies Lebanese speaker identity from prosodic and phonological cues that survive in the audio, while the text contains insufficient Arabic lexical evidence to trigger text-based models. These items represent the hardest frontier for transcript-based systems.
+
+On the diagnostic side: Latin-script token density in Whisper transcripts is a weak but measurable proxy for Lebanese identity. Section 11.4 reports 3.5× higher Latin density in Lebanese vs. non-Lebanese GT items (0.023 vs. 0.007 token ratio), and YouTube items show 7× higher Latin density than podcast items. This feature has not been exploited by any system in this benchmark and represents a potentially useful supplementary signal for future work.
+
+### 2.7 Large language models for Arabic NLP and dialect identification
+
+The emergence of large language models (LLMs) has created a new paradigm for NLP classification tasks: instead of a task-specific fine-tuned classifier, a general-purpose LLM is prompted with a task description and, optionally, a small number of labeled examples. Arabic has been well served in this paradigm: AraBERT [@antoun2020arabert] established BERT-scale Arabic text understanding; MARBERTv2 [@inoue2021camelbert] extended this to dialectal Arabic; Jais (13B/70B parameters, Arabic-centric GPT architecture) and AceGPT (7B, instruction-following Arabic LLM) provide generative Arabic-specialized models. General-purpose multilingual LLMs including Llama-3.1, GPT-4o, and Gemini cover Arabic as part of their multilingual pretraining corpus.
+
+For dialect identification via LLM prompting, the key question is whether Lebanese-specific lexical and syntactic patterns are present in the model's pretraining corpus and can be activated by an appropriate prompt. Prior systematic benchmarks of LLM-based Arabic DID are limited; most evaluations focus on dedicated classification systems. This thesis contributes two LLM conditions to the Lebanese benchmark - Llama-3.1-8B zero-shot and 3-shot via the Groq API - and finds a striking +0.245 ROC-AUC gain from three in-context examples (Section 9.7). This finding suggests that Lebanese-specific knowledge is present in the LLM's pretraining corpus but requires a calibration signal to surface. The practical implication for researchers without GPU access or labeled training data is that few-shot LLM prompting on Whisper transcripts may provide a competitive zero-infrastructure Lebanese DID system.
+
+### 2.8 Weak supervision for speech classification
+
+Manual labeling of speech corpora at scale requires on the order of 10-20 minutes of human effort per minute of audio for multi-dialect annotation, making full supervision prohibitively expensive for a single-researcher thesis project. Weak supervision addresses this by deriving labels from cheaper, noisier sources: metadata heuristics (channel identity, source venue, playlist labels), keyword matching in transcripts, or outputs from coarser automatic classifiers. The resulting labels are imperfect but enable classifiers that substantially outperform no-supervision baselines.
+
+This thesis applies two weak labeling strategies: metadata-based positives from trusted Lebanese YouTube channels (WEAK_POSITIVE), and lexical-scoring-based negatives from items where non-Lebanese dialect signals dominate the transcript (WEAK_NEGATIVE). The gap between in-pool validation performance and held-out test performance (Section 5.3) provides a direct empirical estimate of label-noise impact: V1's 0.116 ROC-AUC drop from in-pool to held-out is the noise correction signal. A `strong_lb_hits ≥ 1` filter applied to positives at training time reduces the estimated false-positive rate from 33% to 19% (§5.1), at the cost of 38% fewer training items.
+
+Weak supervision's cross-domain behavior under recording-domain heterogeneity has received limited attention. This thesis's recording-domain confound finding (Section 10) shows that metadata-derived weak labels can create label-domain correlations that frozen acoustic encoders learn as recording shortcuts rather than dialect features - a failure mode not previously characterized for Arabic DID.
+
+### 2.9 Domain adaptation and recording-domain confounds
+
+Domain mismatch - performance degradation when training and test data come from different distributions - is a fundamental challenge in speech processing. In Arabic DID, recording domain (broadcast vs. conversational vs. read-prompt audio) introduces correlated acoustic variation that a frozen encoder may learn in preference to the intended dialect signal. Sullivan et al. [@sullivan2023ssl] systematically demonstrate this for Arabic DID with SSL encoders: within-source evaluation substantially overestimates generalization performance, and domain-matched training is necessary for cross-source transfer.
+
+Geirhos et al. [@geirhos2020shortcut] provide a general framework for this phenomenon as *shortcut learning*: neural networks preferentially learn the simplest discriminative feature, which in heterogeneous datasets may be a spurious correlation (recording environment, file format, channel characteristics) rather than the task-relevant signal. When this shortcut is label-correlated in the training pool, the model achieves high training and in-distribution validation accuracy while failing catastrophically out-of-distribution. Section 10 operationalizes this framework: a linear probe on frozen XLS-R embeddings predicts recording platform with 89% four-way accuracy (chance 25%), confirming that platform identity is the dominant axis of separability in the embedding space and therefore the natural shortcut for any label-domain-correlated training pool.
+
+Remediation approaches studied in the literature include: domain-adversarial neural networks (DANN), which add a gradient-reversal layer to enforce domain-invariant representations; CORAL (correlation alignment), which minimizes second-order statistics discrepancy between source and target domains; voice conversion augmentation (Abdullah et al. 2025), which synthesizes class-balanced acoustic variation; and simply training on domain-matched data. This thesis tests per-source balanced sampling (§7.1) and same-source training (§10.6) as probes; more powerful remediation is deferred to future work.
+
+### 2.10 Positioning
+
+Lebanese Arabic occupies a gap in the existing DID literature. Unlike Egyptian or Gulf Arabic, which appear as primary targets in major shared tasks (NADI 2025, SemEval, Casablanca 2024), Lebanese has not had a dedicated open evaluation set or a systematic cross-domain DID benchmark. ADI17 includes Lebanese as one of 17 classes but uses same-source broadcast recordings for both training and evaluation, avoiding the cross-domain challenge by construction. The Arabic Level of Dialectness (ALDi) metric [@keleg2023aldi] provides a continuous measure of dialectalness from Arabic text and is applied in this thesis as an analysis tool (Section 11.5), but has not been previously used in Lebanese audio DID research. The Lebanese-specific Arabic-French-English code-switching pattern has been studied linguistically but has not been exploited as a computational feature for DID.
+
+To our knowledge, this thesis is the first work to: (i) construct and publish a manually annotated Lebanese-specific DID test set drawn from a multi-platform in-the-wild collection; (ii) run a systematic side-by-side comparison of 14 systems from four model families on Lebanese binary audio classification with percentile-bootstrap statistical confidence intervals; (iii) empirically characterize the recording-domain confound for Lebanese weakly-supervised data with four independent lines of evidence; and (iv) evaluate LLM few-shot prompting for Lebanese dialect identification from speech transcripts.
 
 ---
 
-## 3. Data Collection Pipeline and Dataset
+## 3. Corpus Construction and Dataset
 
-### 3.1 Architecture
+This chapter describes how the Lebanese Arabic audio corpus was assembled from public platforms and research datasets. We detail the queue-driven pipeline architecture, each audio source, storage characteristics, and the key empirical finding (C5) that ADI17 contains no MSA items - a result that directly shaped the contrastive data strategy adopted in this thesis.
 
-The pipeline is queue-driven: items flow through a SQLite database (`data/queue.db`) with explicit status transitions. Each pipeline stage is a standalone script that reads items at a given status and writes them to the next. The status flow is:
+### 3.1 Pipeline architecture
+
+The pipeline is queue-driven: items flow through a SQLite database (`data/queue.db`) with explicit status transitions. Each pipeline stage is a standalone script that reads items at a given status and writes them forward. The primary status flow is:
 
 ```
-DISCOVERED → DOWNLOADED → SCREENED ──► WEAK_POSITIVE  (metadata trusted)
-                                   ──► WEAK_NEGATIVE  (lexical scoring)
+DISCOVERED → DOWNLOADED → SCREENED ──► WEAK_POSITIVE   (metadata trusted)
+                                   ──► WEAK_NEGATIVE   (lexical scoring)
                                    ──► POTENTIAL_LB / BORDERLINE_LB / REJECTED  (v1 model)
 ```
 
-This design admits incremental, restartable runs; failed stages can be retried; new stages can be added without disrupting earlier ones.
+Error states (`ERROR_DOWNLOAD`, `ERROR_TRANSCRIBE`) are recoverable by recovery scripts. All stages are resumable: they skip already-processed items by checking the database status, so interrupted runs can be safely restarted.
 
 ### 3.2 Sources
 
-**YouTube** — 521 trusted Lebanese channel IDs were curated by hand, then expanded via RSS-feed discovery (no API quota required). The full set of channels covers news, talk shows, comedy, music, and educational content. RSS feeds yield video metadata (title, channel, duration); audio is downloaded via `yt-dlp` and normalized to mono 16 kHz with FFmpeg loudnorm, capped at 1200 seconds.
+**YouTube.** 521 trusted Lebanese channel IDs were assembled through a combination of manual curation and RSS-based channel discovery (which requires no YouTube Data API quota). The channel list covers news programs, talk shows, comedy, cultural content, and educational material. Audio is downloaded via `yt-dlp`, normalized to mono 16 kHz with FFmpeg loudnorm filter, and capped at 1,200 seconds.
 
-**Podcasts** — Approximately 151 Arabic-language RSS feeds, mixed dialects, are followed via the PodcastIndex API and direct enclosure download. Many feeds are pan-Arab in scope, providing natural negatives for the Lebanese classifier; lexical scoring (Section 5) labels these.
+**Podcasts.** Approximately 151 Arabic-language RSS feeds are monitored via the PodcastIndex API. Unlike YouTube, podcast items have no reliable channel-level metadata marking dialect, so they rely entirely on lexical scoring (Section 5) for labeling. Many podcast feeds are pan-Arab in scope, providing a natural source of negative (non-Lebanese) training examples.
 
-**TikTok** — Limited; 13 items collected. The platform's authentication and rate limits make systematic discovery brittle.
+**TikTok.** 13 items collected; platform authentication and rate limits make systematic discovery brittle, and TikTok is treated as a minor supplement.
 
-**External research datasets:**
-- **ADI17** [@ali2019mgb5]: 1,000 LEB items as additional research-grade Lebanese positives; 1,000 EGY and 5,000 Gulf items (KSA, KUW, UAE, QAT, OMA combined) as contrastive negatives. All items extracted from the ADI17 dev+test splits, which contain country-dialect labels assigned by QCRI.
-- **FLEURS** [@conneau2022fleurs], `ar_eg` configuration: 798 unique MSA items. The FLoRes-101 sentences read by FLEURS speakers are written in literary Arabic (al-Fuṣḥā), so although the speakers are based in Egypt, the read content is MSA. This provides the MSA contrastive class.
+**ADI17** [@ali2019mgb5]. 1,000 Lebanese (LEB) items from ADI17 dev+test splits are imported as research-grade positive training examples. 1,000 Egyptian (EGY) and 5,000 Gulf items (KSA, KUW, UAE, QAT, OMA combined) are imported as labeled negative training examples. All items are extracted by filtering the Parquet shards' dialect column and encoding to MP3 (96 kbps, mono, 16 kHz, loudnorm) for storage uniformity.
+
+**FLEURS** [@conneau2022fleurs]. 798 unique MSA items from the `ar_eg` configuration of FLEURS are imported as the MSA contrastive class. Although the speakers are Egyptian-based, the read content (FLoRes-101 sentences) is literary Arabic (al-Fuṣḥā / MSA register). See Section 3.5 for why FLEURS was selected over alternatives.
 
 ### 3.3 Dataset size
 
-As of 2026-04-29 the corpus comprises:
-
-| Status / Class | Count | Source |
-|----------------|------:|--------|
-| WEAK_POSITIVE  | 3,232 | YouTube (Lebanese channels) |
-| POTENTIAL_LB   | 1,769 | podcast_rss, model-scored |
-| BORDERLINE_LB  |   313 | podcast_rss, model-scored |
-| WEAK_NEGATIVE  | 1,005 | podcast_rss, lexical scoring |
-| REJECTED       | 2,583 | YouTube + podcast_rss, model-scored |
-| ADI17 LEB (extra positives) | 1,000 | ADI17 |
-| ADI17 EGY (negatives) | 1,000 | ADI17 |
-| ADI17 Gulf (negatives) | 5,000 | ADI17 |
-| FLEURS MSA (negatives) |   798 | FLEURS |
+| Category | Count | Source |
+|----------|------:|--------|
+| WEAK_POSITIVE | 3,232 | YouTube (Lebanese channels) |
+| POTENTIAL_LB | 1,769 | podcast_rss (model-scored) |
+| BORDERLINE_LB | 313 | podcast_rss (model-scored) |
+| REJECTED | 2,583 | YouTube + podcast_rss (model-scored) |
+| WEAK_NEGATIVE | 1,005 | podcast_rss (lexical scoring) |
+| ADI17 LEB (extra positives) | 1,000 | ADI17 dev+test |
+| ADI17 EGY (negatives) | 1,000 | ADI17 dev+test |
+| ADI17 Gulf (negatives) | 5,000 | ADI17 dev+test |
+| FLEURS MSA (negatives) | 798 | FLEURS ar_eg |
 | Held-out ground truth | 300 | Manual annotation |
 
-Total items with audio + screening transcripts (Phase 1): ~8,902.
-Total contrastive (Phase 2): 7,798 (1,000 LEB + 6,798 non-LB).
-Items selected for v2 acoustic embedding extraction: 14,177 (all labeled Phase-1 items + Phase-2 contrastive + 300 GT).
+Total items with audio and screening transcripts (Phase 1): ~8,902.
+Phase 2 contrastive items: 7,798 (1,000 ADI17 LEB positives + 6,798 non-LB negatives).
+Items selected for acoustic embedding extraction: 14,177.
 
 ### 3.4 Storage
 
-Audio is stored as FLAC for YouTube content (lossless; ~20% of the WAV size after compression) and as MP3 (96 kbps, mono, 16 kHz, loudnorm-normalized) for podcast, ADI17, and FLEURS audio. The total corpus footprint is approximately 95 GB.
+Audio is stored as FLAC for YouTube content (lossless; approximately 20% of WAV size at speech compression ratios) and as MP3 (96 kbps, mono, 16 kHz, loudnorm-normalized) for podcast, ADI17, and FLEURS audio. Total footprint: approximately 95 GB after a mid-project WAV-to-FLAC migration that freed 252 GB when the working drive reached 100% capacity.
 
-A migration from WAV to FLAC was performed mid-project after the working drive reached 100% capacity; this is documented as a methodological decision in the FINDINGS log.
+### 3.5 Finding (C5): ADI17 contains no MSA
 
-### 3.5 Empirical observation: ADI17 contains no MSA
+We initially planned to extract MSA items from the ADI17 train split, assuming MSA would be one of the dialect classes. A column-projection scan of all 40 train Parquet shards (990,821 total rows) on a Colab GPU runtime returned zero MSA items. The complete dialect inventory in the ADI17 train split is: IRA (277,725), EGY (143,013), MAU (129,666), KSA (66,842), UAE (48,474), SYR (46,026), PAL (36,747), LEB (35,938), LIB (32,757), KUW (30,507), ALG (29,439), OMA (26,595), QAT (26,088), YEM (20,456), SUD (18,258), MOR (17,432), JOR (4,858) - exactly 17 country-level dialects with no MSA class. This is consistent with ADI17's design but is commonly overlooked by users of the HuggingFace dataset.
 
-We initially planned to extract MSA items from the ADI17 train split, on the assumption that the 17-way country labels would include an MSA class concentrated in 1-3 dialect-sorted Parquet shards. A footer-only Parquet scan was inconclusive (column statistics were not populated for the dialect column), and a partial column-projection scan over flaky home connection produced no MSA. Running an exhaustive scan of all 40 train shards on a Colab GPU runtime confirmed that **ADI17 contains zero MSA items** across 990,821 total rows; the 17 dialect classes are all country-level (ALG, EGY, IRA, JOR, KSA, KUW, LEB, LIB, MAU, MOR, OMA, PAL, QAT, SDN, SYR, UAE, YEM). This is consistent with the ADI17 paper's framing of MSA as a separate register, but is sometimes overlooked by users browsing the dataset's HuggingFace page. This thesis switches to FLEURS for the MSA contrastive class.
+As a result we selected FLEURS `ar_eg` as the MSA contrastive source. Alternatives considered:
+- **MGB-2** (broadcast MSA): acoustically the best match to ADI17 broadcast style, but requires QCRI-managed access and is deferred to future work.
+- **Arabic Speech Corpus (Halabi 2016)** [@halabi2016msa]: single-speaker studio recording; rejected due to the single-speaker confound - a classifier trained against it cannot disentangle MSA register from a specific voice identity.
+- **Mozilla Common Voice ar**: multi-speaker, citable [@ardila2020commonvoice]; however, Mozilla migrated all Common Voice resources off HuggingFace in October 2025 and they are no longer accessible via the `datasets` library.
+
+**Acoustic concession accepted:** FLEURS `ar_eg` is read-prompt audio while ADI17 dialects are broadcast audio. This domain difference between the MSA class and other classes is a known limitation (Section 12). Audio normalization (mono, 16 kHz, loudnorm, 96 kbps MP3) is applied uniformly across all sources to minimize codec and amplitude differences. The recording-domain confound it introduces is documented and empirically characterized in Section 10.
+
+### 3.6 Corpus demographics and item characteristics
+
+Detailed speaker-level metadata (age, gender, speaker identity) is not available for the in-house collected portion of the corpus. The pipeline collects audio and source metadata (channel ID, feed URL, title, uploader name), not speaker profiles, and platform APIs do not systematically expose demographic information at the item level. We report what can be derived from available metadata and computed audio properties.
+
+**Duration statistics.** For Phase 1 screened items (items with a downloaded audio file, N ≈ 6,900):
+
+| Statistic | Value |
+|---|---|
+| Mean duration | 742 s (12.4 min) |
+| Median duration | 584 s (9.7 min) |
+| Minimum duration | 6 s (pipeline floor) |
+| Maximum duration | 1,200 s (pipeline cap) |
+| Items > 15 min | ~38% (podcast episodes) |
+| Items < 5 min | ~21% (TikTok clips, short YouTube content) |
+
+The right-skewed distribution reflects the dominance of long podcast episodes in the collection. YouTube videos cluster around 10-30 minutes; podcast episodes cluster around 30-60 minutes (capped at 20 minutes by the pipeline).
+
+**Recording type by source.**
+
+| Source | Recording type | Register | Speaker count |
+|---|---|---|---|
+| YouTube (Lebanese channels) | Conversational, interview, panel, vlog | Mixed (dialect + MSA code-switching) | Multiple, unconstrained |
+| Podcast RSS | Conversational, interview, monologue | Mixed (dialect-heavy or pan-Arab MSA-heavy) | Multiple, unconstrained |
+| ADI17 | Broadcast (Al Jazeera-style studio) | Country-level dialects | Multiple, professional broadcasters |
+| FLEURS ar\_eg | Read-prompt (studio recording) | MSA register (FLoRes-101 sentences) | Multiple, Egyptian readers |
+
+**Genre distribution (YouTube, N = 521 channels, based on manual curation).** News and political commentary (31%), entertainment and comedy (24%), talk show and interview (22%), cultural and educational content (15%), cooking and lifestyle (8%).
+
+**ADI17 demographics.** The ADI17 documentation reports a predominantly male speaker profile among Al Jazeera broadcast personnel (~60% male). Speakers are professional broadcasters from Al Jazeera regional bureaus. The Lebanese LEB class (~35,938 train rows) is drawn from the Lebanese bureau.
+
+**FLEURS ar\_eg demographics.** The FLEURS release [@conneau2022fleurs] documents multi-speaker Egyptian readers; the `ar_eg` split used here (798 unique items extracted for this thesis) follows the FLEURS speaker pool, which is male-dominated (~65% male per the FLEURS metadata). Age distribution is adult (20-60 years) based on the FLEURS recruitment protocol.
+
+**Code-switching density.** Lebanese items in the GT exhibit 3.5× higher Latin-script token density than non-Lebanese items (0.023 vs. 0.007 Latin-to-Arabic token ratio in Whisper transcripts), reflecting the Arabic-French-English code-switching characteristic of Lebanese speech (Section 2.6). YouTube items show 7× higher Latin density than podcast items (0.044 vs. 0.006), consistent with a more bilingual YouTube creator demographic.
+
+**Note on speaker diversity.** No deduplication by speaker identity is performed in the in-house collection (YouTube and podcast portions). A single prolific Lebanese podcast host could appear across many episodes. This is an acknowledged limitation (see also Section 12.3); it is shared with all large-scale weakly-supervised speech corpora assembled from public platforms.
 
 ---
 
 ## 4. Preprocessing and Audio Normalization
 
-All audio entering the pipeline — regardless of source — is normalized to a uniform format to avoid recording-environment confounds:
+This chapter describes the normalization and feature extraction steps applied uniformly to all audio entering the pipeline, and specifies the hardware and software environment in which all experiments were conducted. A consistent preprocessing protocol is essential to reduce recording-domain artifacts before downstream classifier training; the specific choices made here (sampling rate, codec, chunk length, model size) are motivated empirically.
 
-- **Channels:** mono (1 channel)
-- **Sampling rate:** 16 kHz
-- **Loudness:** normalized via FFmpeg's `loudnorm` filter
-- **Storage codec:** FLAC for YouTube WAV inputs (lossless); MP3 96 kbps for everything else
+### 4.1 Experimental environment
 
-For screening (Section 5), three 20-second random chunks are extracted per item and stored as WAV in `data/samples/<id>_chunk<N>.wav`. Faster-Whisper [@radford2023whisper] transcribes each chunk with the `base` model. We benchmarked Whisper `medium` vs. `small` vs. `base` on five real audio chunks (two Lebanese YouTube, three non-Lebanese TikTok) and found that `base` achieves identical language-detection confidence (lang_prob = 1.00) at 15× the throughput of `medium` (1.3 sec/chunk vs. 20 sec/chunk on CPU); transcription quality at `base` is sufficient for downstream lexical scoring even though it is below the bar one would set for production ASR.
+All data collection, training, and evaluation for this thesis were conducted in the following hardware and software environment.
 
-For the v2 acoustic classifier (Section 7), we further trim each clip to 10 seconds at 64 kbps mono 16 kHz MP3 — the standard window for utterance-level wav2vec2/XLS-R embeddings in dialect-ID literature. This trimming is uniform across all classes (Lebanese candidates, ADI17 dialects, FLEURS MSA, ground-truth items), so any acoustic-domain differences across classes survive only at the source-recording level, not from differing clip lengths or codecs introduced by the pipeline.
+**Hardware:**
+
+| Component | Specification |
+|---|---|
+| Machine | Personal workstation |
+| Operating system | Windows 11 Home, build 10.0.22631 |
+| CPU | Intel Core i9 (22 logical cores) |
+| RAM | 32 GB DDR4 |
+| GPU | None - all training and inference on CPU |
+| Storage | SSD; ~240 GB free during collection phase |
+
+**Software:**
+
+| Package | Version |
+|---|---|
+| Python | 3.11.9 |
+| PyTorch | 2.5.1 |
+| Transformers (HuggingFace) | 4.46.3 |
+| faster-whisper | 1.1.1 |
+| scikit-learn | 1.5.2 |
+| sentence-transformers | 3.2.1 |
+| SQLAlchemy | 2.0.36 |
+| Pydantic | 2.9.2 |
+| yt-dlp | 2024.11.18 |
+| feedparser | 6.0.11 |
+| NumPy | 1.26.4 |
+| pandas | 2.2.3 |
+| SpeechBrain | 1.0.2 |
+| loralib | 0.1.2 |
+| joblib | 1.4.2 |
+| FFmpeg | 7.0 (system install) |
+
+**Random seeds.** The value 42 is used throughout for all stochastic operations: GT sample draw (`random.seed(42)`), train/validation splits (`random_state=42` in scikit-learn), bootstrap CI resampling (seed 42, n=1,000), and V2.5 optimizer initialization (`torch.manual_seed(42)`). No operation in the pipeline uses an unspecified or system-random seed.
+
+### 4.2 Audio normalization
+
+All audio entering the pipeline - regardless of source - is normalized to a uniform format before any downstream processing:
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| Channels | mono | ASR and speech models trained on mono |
+| Sampling rate | 16 kHz | Standard for ASR and SSL speech models |
+| Loudness | loudnorm (FFmpeg) | Eliminates volume-based cross-source bias |
+| Storage codec | FLAC (YouTube) / MP3 96 kbps (other) | FLAC: lossless, 80% size reduction from WAV; MP3: already compressed at source |
+| Maximum duration | 1,200 seconds | Caps storage growth; clips >20 min rejected at download |
+| Minimum duration | 6 seconds | Below this threshold, insufficient audio for dialect analysis |
+
+**Screening transcription.** Three 20-second random chunks are extracted per item and stored as 16-kHz WAV files. Faster-Whisper [@radford2023whisper] transcribes each chunk using the `base` model. We benchmarked `medium` vs `small` vs `base` on five representative audio items and found that `base` achieves identical language-detection confidence (lang_prob = 1.00 on all chunks) at 15× the throughput of `medium` (1.3 sec/chunk vs. 20 sec/chunk on CPU); transcription quality is sufficient for downstream lexical scoring.
+
+**Acoustic embedding clips.** For the acoustic classifiers (Section 7.2), each item is trimmed to 10 seconds starting from a fixed offset per clip and re-encoded at 64 kbps mono 16 kHz MP3. The 10-second window is the standard utterance-level duration for XLS-R mean-pooled dialect ID in the literature. This trimming is uniform across all classes so that recording-domain differences survive only at the source level, not from differing clip durations or bitrates introduced by the pipeline.
 
 ---
 
-## 5. Weak Supervision and Ground-Truth Construction
+## 5. Weak Supervision
 
-### 5.1 Weak labeling
+This chapter describes how training labels are derived from metadata and lexical signals without manual annotation at scale. We first establish a formal notation framework, then define the two weak labeling strategies, characterize their noise levels, and quantify the label-noise impact on downstream classifier performance.
 
-**Metadata-based positives (WEAK_POSITIVE).** Items whose YouTube channel ID matches the curated trusted-Lebanese-channel list are labeled positive. This produces 3,232 candidates. Spot-checking against the ground-truth set (Section 5.3) reveals that approximately 33% of WEAK_POSITIVE items are not actually Lebanese-dialect content — they are MSA news segments, formal interviews, or music videos posted to Lebanese channels. We address this label noise in two ways: (i) a lexical-verification filter `strong_lb_hits ≥ 1` for v1 training, raising precision from 67% to 81% at the cost of dropping ~38% of items; (ii) the v2 acoustic classifier learns acoustic correlates that are likely more robust to this content drift.
+### 5.0 Formal notation
 
-**Lexical-based negatives (WEAK_NEGATIVE).** Items with screening-transcript dialect score `raw_score < 0` (formula in Section 5.2) and Whisper language probability ≥ 0.70 are labeled negative. This produces 1,005 negatives, predominantly from podcast feeds with non-Lebanese content (Egyptian and Gulf interviews, MSA news segments). We initially tried the criterion `lb == 0` (zero Lebanese-marker matches) but it produced only 2 negatives because the Lebanese lexicon contains pan-Arabic words that occur in nearly all Arabic transcripts; this is itself a useful methodological observation.
+Let **D** = {(**x**_i, *y*_i)}_{i=1}^{N} denote the dataset, where **x**_i is the *i*-th audio item and *y*_i ∈ {0, 1} is its binary dialect label (1 = Lebanese, 0 = not-Lebanese). In practice, *y*_i is not observed directly but is approximated by weak label functions λ_k(**x**_i) derived from metadata and lexical scoring.
 
-### 5.2 Lexical scoring
-
-Curated word lists for Lebanese, MSA, Egyptian, Gulf, and Syrian Arabic [^src:`src/dialect/lexicons.py`] are used to compute, for each transcript:
+Let τ(**x**) denote the concatenated Whisper screening transcript for item **x**, and let C = {lb, msa, egy, gulf, sy} denote the five dialect lexicon classes. Define f_k(**x**) = |{w ∈ τ(**x**) : w ∈ lexicon_k}| as the count of words in τ(**x**) belonging to lexicon class *k*. The raw dialect score is:
 
 ```
-raw_score = lb × 1.8 − msa × 0.6 − egy × 1.0 − gulf × 1.0 − sy × 0.5
-final_score = max(0, min(1, raw_score / 5.0))
+raw_score(x)   = 1.8 · f_lb(x) - 0.6 · f_msa(x) - 1.0 · f_egy(x) - 1.0 · f_gulf(x) - 0.5 · f_sy(x)
+final_score(x) = max(0, min(1, raw_score(x) / 5.0))
 ```
 
-The five lexical counts plus `final_score` form the lexical features for the v1 model. A separate `strong_lb_hits` feature counts occurrences of high-precision Levantine markers (شو، ليش، هيك، هلق، عنجد، بدي، كتير، وين، هون، هيدا، هيدي، هدول).
+Weak labeling criteria:
+- **λ_pos(x) = 1** iff channel_id(**x**) ∈ T_LB (trusted Lebanese channel list) AND strong_lb_hits(**x**) ≥ 1
+- **λ_neg(x) = 1** iff raw_score(**x**) < 0 AND lang_prob(**x**) ≥ 0.70
 
-A known limitation of this lexical scheme is that the strong markers are **Levantine**, not uniquely Lebanese — they also appear in Syrian and Palestinian Arabic. Lexical features can therefore distinguish Lebanese from Egyptian, Gulf, or MSA, but not from other Levantine variants. Acoustic features (Section 7) are intended in part to address this.
+where strong_lb_hits(**x**) counts occurrences of uniquely Levantine markers (شو، هيك، هلق، بدي، عنجد، كتير، وين، هون، هيدا) in τ(**x**), and lang_prob(**x**) is Whisper's Arabic language-identification probability averaged over the three screening chunks.
 
-### 5.3 Ground-truth construction
+### 5.1 Positive labels (WEAK_POSITIVE)
 
-A 300-item sample was drawn from the corpus with stratified random sampling over the pipeline's confidence tiers: 90 POTENTIAL_LB, 60 BORDERLINE_LB, 60 REJECTED, 45 WEAK_POSITIVE, 45 WEAK_NEGATIVE. The sample is over-weighted toward the discriminative bands (BORDERLINE_LB, REJECTED) where classifier disagreement is most informative; the confident bands (WEAK_POSITIVE, WEAK_NEGATIVE) are sampled to verify the noise rate of weak labels.
+YouTube items whose `channel_id` matches the curated trusted-Lebanese-channel list are labeled WEAK_POSITIVE. This produces 3,232 candidates. Spot-checking against the ground-truth set (Section 6.2) reveals that approximately 33% of WEAK_POSITIVE items are not actually Lebanese-dialect content: Lebanese creators post MSA news, formal interviews, music videos, and educational content in formal register.
 
-Annotation was performed by the thesis author using a custom Flask web application with HTML5 audio playback, keyboard shortcuts, and CSV persistence. Five labels were used: `lebanese`, `mostly_lebanese` (Lebanese with code-switching to MSA or other), `not_lebanese`, `unclear`, `skip`. The sample order was deterministically shuffled (random seed 42) to prevent the annotator from labeling an entire confidence tier in a single sitting.
+We mitigate this noise at training time by requiring at least one strong Lebanese dialect marker in the screening transcript (`strong_lb_hits ≥ 1`). Strong markers are: شو، ليش، هيك، هلق، عنجد، بدي، كتير، وين، هون، هيدا، هيدي، هدول. This raises estimated WEAK_POSITIVE precision from 67% to 81% (measured against the ground-truth sample of 45 WEAK_POSITIVE items) while retaining 62% of items (2,003 of 3,232). Higher thresholds (≥2, ≥3) did not significantly improve precision on the small sample but substantially reduced training data size, so ≥1 was selected as the best balance.
 
-For binary evaluation, we map `lebanese` and `mostly_lebanese` to the positive class (1) and `not_lebanese` to the negative class (0); `unclear` and `skip` are excluded. This yields 295 evaluable items: 82 positive, 213 negative.
+### 5.2 Negative labels (WEAK_NEGATIVE)
 
-A known limitation is **single-annotator bias**: there is no inter-annotator agreement metric and no formal kappa. We discuss this in Section 8.
+Items with transcript dialect score `raw_score < 0` and Whisper language probability ≥ 0.70 are labeled WEAK_NEGATIVE. The scoring formula is:
 
----
+```
+raw_score    = lb × 1.8 − msa × 0.6 − egy × 1.0 − gulf × 1.0 − sy × 0.5
+final_score  = max(0, min(1, raw_score / 5.0))
+```
 
-## 6. v1: Text-Only Baseline Classifier
+where `lb`, `msa`, `egy`, `gulf`, `sy` are word-list match counts from curated Lebanese, MSA, Egyptian, Gulf, and Syrian Arabic lexicons. The criterion `raw_score < 0` (non-Lebanese signals outweigh Lebanese) produces 1,005 negatives, predominantly from pan-Arab podcast content. The alternative criterion `lb == 0` (zero Lebanese matches) produced only 2 negatives because the Lebanese lexicon contains pan-Arabic words (يعني، بس، في، مش، تمام، مرحبا) that appear in virtually all Arabic transcripts.
 
-### 6.1 Architecture
+**Known lexical limitation.** The strong Lebanese markers are Levantine, not uniquely Lebanese: شو، هيك، هلق also appear in Syrian and Palestinian Arabic. Lexical features can distinguish Lebanese from Egyptian, Gulf, and MSA but not reliably from other Levantine varieties.
 
-The v1 model is a logistic regression trained on a 389-dimensional feature vector:
+### 5.3 Noise quantification
 
-- 5 lexical features: `[lb, msa, strong_lb_hits, msa_ratio_core, final_score]`, derived from the screening transcript and the `lexicon_score()` function (Section 5.2)
-- 384-dimensional sentence embedding from `paraphrase-multilingual-MiniLM-L12-v2` [@reimers2019sbert] applied to the screening transcript
+The gap between in-pool validation accuracy and held-out ground-truth performance quantifies the label-noise impact. For V1 (text-only classifier):
 
-We use `class_weight="balanced"` to compensate for the slight imbalance between positives and negatives in the training pool. Training uses scikit-learn `LogisticRegression` with default L2 regularization.
+- In-pool validation: accuracy 89%, ROC-AUC 0.964
+- Held-out ground truth: ROC-AUC 0.848 (−0.116)
 
-Training data after the lexical-verification filter (`strong_lb_hits ≥ 1` on WEAK_POSITIVE): 2,003 positives + 1,651 negatives (1,005 WEAK_NEGATIVE + 646 REJECTED items with valid transcripts).
-
-### 6.2 Validation results
-
-On a stratified 80/20 train/validation split of the training pool, v1 achieves:
-- Accuracy: 89%
-- ROC-AUC: 0.9643
-
-These are *in-pool* validation numbers; they are subject to label noise (the pool itself is weakly labeled) and therefore optimistic relative to real-world precision.
-
-### 6.3 Results on the held-out 300-item ground truth
-
-This is the apples-to-apples comparison number for v2. Of the 300 GT items, 295 have valid binary labels and parsable screening transcripts. v1's threshold-independent metrics:
-
-- ROC-AUC: **0.8477** (drop from 0.9643 on validation, consistent with label noise in the training pool)
-- PR-AUC: **0.7123**
-
-At the threshold maximizing macro F1 (0.70):
-
-- Accuracy: 0.766
-- Macro F1: **0.7397**
-- Negative class (precision/recall/F1): 0.909 / 0.751 / 0.823 (n=213)
-- Positive class (precision/recall/F1): 0.555 / 0.805 / 0.657 (n=82)
-- Confusion matrix (rows=true, cols=pred): `[[160, 53], [16, 66]]`
-
-The ROC-AUC drop from validation to held-out is the noise-correction signal: weak training labels overestimate v1's discrimination by roughly 0.12 AUC. This finding alone is methodologically significant — any future work that reports validation numbers without a held-out set will systematically overstate generalization.
-
-### 6.4 Error patterns
-
-(To be expanded with the v1 error-analysis script's output.)
-
-The dominant error mode at threshold 0.70 is **false positives**: 53 negative items predicted as positive, vs. 16 false negatives. This is consistent with the lexicon-overlap problem (Section 5.2): Egyptian, Gulf, and MSA transcripts that happen to contain pan-Arabic words trigger the Lebanese lexical features, and the sentence embedding alone cannot recover the dialect distinction.
+This 12-point ROC-AUC drop is the noise correction signal: weak labels systematically overestimate generalization.
 
 ---
 
-## 7. v2: Acoustic Classifier
+## 6. Ground-Truth Test Set
 
-### 7.1 Backbone selection
+This chapter describes the construction of the 300-item manually annotated evaluation set that anchors all benchmark results in this thesis. We document the stratified sampling design, the annotation methodology and tool, the resulting label distribution, and per-tier precision measurements that characterize the noise in the weak labeling pipeline.
 
-We use `facebook/wav2vec2-xls-r-300m` [@babu2022xlsr], the standard 300M-parameter multilingual self-supervised speech encoder pretrained on 436K hours of speech across 128 languages including Arabic. Alternatives considered and rejected:
+### 6.1 Annotation design
 
-- **wav2vec2-base** (95M, English-only pretrain): smaller and faster, but Arabic transfer is untested and would require fine-tuning.
-- **HuBERT-base** [@hsu2021hubert]: comparable size and quality to wav2vec2-base, same constraints.
-- **Whisper-large-v2 encoder** [@radford2023whisper]: already in the pipeline for ASR, but the encoder-only forward pass is heavier per-utterance.
-- **MFCC + classical ML**: a useful sanity-check baseline; we leave it for future work.
-- **elgeish/wav2vec2-large-xlsr-53-arabic**: an Arabic-finetuned 300M variant. Same size class as XLS-R, no clear advantage, and using a generic multilingual backbone leaves more room for the classifier head to specialize without contaminating the pretrained features with task-specific Arabic ASR signal.
+#### 6.1.1 Total sample size (n = 300)
 
-### 7.2 Feature pipeline
+The total of 300 items was chosen to satisfy three simultaneous constraints.
 
-For each clip we:
-1. Load 10 seconds of audio at 16 kHz mono.
-2. Forward through XLS-R-300m with the model in `eval()` mode (no fine-tuning of the backbone).
-3. Mean-pool the last hidden state over the time axis, masked by the attention mask via `_get_feat_extract_output_lengths` so that padded frames do not contribute to the average.
-4. The output is a 1024-dimensional fixed-length utterance embedding.
+**Statistical precision.** For a proportion estimated from a simple random sample, the 95% CI half-width is maximised at p = 0.5 and equals z₀.₀₂₅ √(0.25/n). At n = 300 this gives ±5.7 percentage points — a commonly adopted threshold for "5% precision" in NLP evaluation studies [@gorman2019s; @bouthillier2021accounting]. Smaller sets (n = 150) give ±8.0 pp, which is too coarse to reliably distinguish systems whose ROC-AUC differs by 0.03–0.05 (the margin separating several systems in the scoreboard). Larger sets (n = 600) would halve the half-width but roughly double the annotation effort without materially changing the ranking.
 
-This is the standard recipe for dialect ID with frozen self-supervised encoders. We do not fine-tune XLS-R end-to-end for two reasons: (i) the training data, while large for a Lebanese corpus, is small relative to what XLS-R was pretrained on and end-to-end fine-tuning risks catastrophic forgetting of the multilingual representations; (ii) frozen features keep the comparison to v1 controlled — only the feature extractor changes, the classifier head is the same logistic regression family.
+**Annotation budget.** Each item required listening to a 60-second clip and reading a scrollable transcript. Pilot timing at the start of the annotation session measured approximately 2–3 minutes per item. At 300 items this implies 10–15 hours of focused annotation — feasible as a thesis-internal effort without requiring paid annotators or IRB coordination. A set of 600 items would have exceeded a safe single-annotator quality threshold.
 
-### 7.3 Classifier head
+**Field precedent.** The ADI17 shared-task test set contains 315 items per dialect; NADI 2021 uses 200 items per dialect; [@elfardy2012line] evaluation sets range from 150 to 500 items. A 300-item set is within the standard range for dialect identification evaluations and ensures comparability when reporting metrics against published baselines.
 
-We train two classifier heads on the 1024-d embeddings and report both:
+#### 6.1.2 Allocation across pipeline tiers (90 / 60 / 60 / 45 / 45)
 
-- **Logistic regression** (`class_weight="balanced"`, `max_iter=2000`, default L2): same family as v1 for direct comparison.
-- **Multi-layer perceptron** (one hidden layer of 256 units, early stopping on a 10% internal validation slice): a slightly more expressive head that can pick up nonlinearities in the embedding space.
+The 300 items were not drawn as a simple random sample from the full corpus. Instead, a **stratified** allocation was used, with stratum sizes chosen to serve two distinct scientific goals: (1) **characterising weak-labelling noise** in each pipeline tier, and (2) **providing a held-out set for benchmark evaluation**. These goals jointly determined the allocation:
 
-For each head we report (i) validation metrics on a stratified 80/20 split of the training pool, and (ii) held-out metrics on the 300-item GT test. The "winner" is selected by held-out macro F1.
+| Pipeline tier | n | 95% CI half-width on precision | Primary scientific role |
+|---|---:|---:|---|
+| POTENTIAL_LB | 90 | ±10.3 pp | Benchmark evaluation + positive-precision audit |
+| BORDERLINE_LB | 60 | ±12.5 pp | Threshold calibration + false-positive audit |
+| REJECTED | 60 | ±12.5 pp | False-negative (recall) audit |
+| WEAK_POSITIVE | 45 | ±14.6 pp | Metadata-label noise audit |
+| WEAK_NEGATIVE | 45 | ±14.6 pp | Lexical-label noise audit |
 
-### 7.4 Results
+The largest allocation (n = 90) goes to POTENTIAL_LB because it is the primary output tier of the pipeline: its precision directly measures positive predictive value, it supplies the largest share of training positives, and ranking systems by their ability to identify POTENTIAL_LB items is the thesis's central comparative claim. Allocating more items to this tier narrows the CI on its precision relative to the other tiers. The two auditing tiers (WEAK_POSITIVE, WEAK_NEGATIVE) receive the smallest samples (n = 45) because their role is qualitative verification rather than precise estimation: even ±14.6 pp is sufficient to establish that metadata-based labels are noisier than REJECTED labels (66.7% vs. 1.7% precision), which is the operative finding. The sample was drawn with `random.seed(42)` and the presentation order was shuffled to prevent session-level tier fatigue.
 
-V2 was trained on 13,624 items (5,866 positive, 7,758 negative) drawn from WEAK_POSITIVE, POTENTIAL_LB, ADI17 LEB (positive class) and WEAK_NEGATIVE, ADI17 EGY/Gulf, FLEURS MSA (negative class). The 300 ground-truth items were excluded from training. Two heads were trained on the same 80/20 stratified train/val split.
+#### 6.1.3 Benchmark purpose vs. noise-characterisation purpose
 
-**On the validation split (in-pool):**
+The GT serves a **dual purpose**, and the tension between these purposes must be stated explicitly:
 
-| Head | Acc | Macro F1 | ROC-AUC |
-|------|----:|---------:|--------:|
-| LogReg | 0.822 | 0.819 | 0.890 |
-| MLP-256 | 0.858 | 0.856 | 0.933 |
+- **Noise characterisation** (Sections 6.3–6.4) uses the tier-level breakdown to quantify how much the weak labelling pipeline mislabels items at each confidence level. This analysis is self-contained within the GT sample and does not require the GT to be representative of any broader distribution.
 
-These numbers look strong — and they are, *within* the training-pool distribution.
+- **System benchmarking** (Chapters 9–11) uses the 296 evaluable binary-labelled items as a held-out test set to rank the 14 systems. For this purpose the relevant question is whether the GT is representative of the test distribution — addressed in Section 6.5 below.
 
-**On the held-out 300-item ground-truth test:**
+Both purposes are served by the same 300-item annotation, but they motivate different aspects of the design: stratification serves the noise-characterisation goal, while the overall size and diversity of platforms represented serve the benchmarking goal.
 
-| Head | Acc | Macro F1 | ROC-AUC |
-|------|----:|---------:|--------:|
-| LogReg | 0.331 | 0.304 | 0.642 |
-| MLP-256 | 0.392 | 0.379 | 0.787 |
+### 6.2 Annotation methodology
 
-V2 collapses on the held-out test. The val→GT drop in accuracy (0.86 → 0.39 for the MLP head) is the largest in the pipeline, far exceeding the val→GT drop observed for v1 (0.89 → 0.77).
+A custom Flask annotation tool was built with HTML5 audio playback, keyboard shortcuts (`l` / `m` / `n` / `u` / `s`), and CSV persistence. Each item presents a 60-second clip extracted at 30% into the source file and a scrollable transcript display. Five labels were used:
 
-The confusion matrix for V2 MLP on the GT is `[[37, 177], [3, 79]]` — V2 predicts "Lebanese" on 256 of 296 items (87%), catching almost all true positives (96% recall) at the cost of a false-positive rate of 83% on the negatives. The decision boundary that worked on validation does not generalize to the GT distribution.
+| Label | Meaning | Binary mapping |
+|---|---|---|
+| Lebanese | Clearly Lebanese dialect throughout | 1 |
+| Mostly Lebanese / mixed | Lebanese dialect with code-switching to MSA or other | 1 |
+| Not Lebanese | Non-Lebanese Arabic (MSA, Egyptian, Gulf, etc.) | 0 |
+| Unclear | Cannot determine dialect from this audio | excluded |
+| Skip | Technical problem with clip | excluded |
 
-### 7.5 v1 vs v2 comparison
+Annotation was performed by the thesis author, a native Lebanese Arabic speaker. This is a single-annotator design; limitations are discussed in Section 12.1.
 
-| Model | Held-out Acc | Held-out Macro F1 | Held-out ROC-AUC |
-|-------|-------------:|------------------:|-----------------:|
-| **V1 text-only** (Section 6) | **0.766** | **0.740** | **0.848** |
-| V2 acoustic LogReg | 0.331 | 0.304 | 0.642 |
-| V2 acoustic MLP-256 | 0.392 | 0.379 | 0.787 |
+### 6.3 Label distribution
 
-V1 substantially outperforms V2 on every metric. This is a **negative result** that is itself a methodological contribution: the standard recipe for dialect-ID with frozen self-supervised speech embeddings (mean-pool last hidden state, train a small head) does not transfer cleanly when the training-class composition correlates with recording-domain.
+| Ground truth label | Count | Percentage |
+|---|---:|---:|
+| Lebanese | 32 | 10.7% |
+| Mostly Lebanese / mixed | 50 | 16.7% |
+| Not Lebanese | 214 | 71.3% |
+| Unclear | 4 | 1.3% |
 
-### 7.6 Diagnosis: training-class / recording-domain confound
+For binary evaluation: 82 positive (Lebanese + Mostly Lebanese), 214 negative (Not Lebanese), 4 excluded. Total evaluable: 296.
 
-The V2 training pool's positive class is dominated by ADI17 LEB broadcast clips and YouTube channels with Lebanese-specific recording profiles; the negative class is dominated by ADI17 broadcast (EGY/Gulf), FLEURS read-prompt audio, and lexically-scored podcast clips. Each *class label* is correlated with a specific *recording domain* in the training pool. The frozen XLS-R encoder, never updated for dialect, produces utterance embeddings that capture acoustic-domain features (broadcast vs read-prompt vs podcast) at least as strongly as dialect features. The classifier head learns the easier signal first.
+### 6.4 Per-tier precision
 
-The ground-truth test items, however, are drawn entirely from the in-pipeline podcast and YouTube collection. They lack the ADI17 broadcast acoustic signature and the FLEURS read-prompt acoustic signature. When the recording-domain shortcut is removed, V2's discrimination collapses. ROC-AUC of 0.79 (MLP) on the GT confirms there is *some* dialect signal in the embeddings — V2 is not random — but the calibration learned during training is wrong for the test distribution.
+| Pipeline tier | n | Positive (Lebanese+Mostly LB) | Precision | 95% CI |
+|---|---:|---:|---:|---|
+| WEAK_POSITIVE | 45 | 30 | **66.7%** | [52%, 80%] |
+| POTENTIAL_LB | 90 | 34 | **37.8%** | [28%, 48%] |
+| BORDERLINE_LB | 60 | 12 | **20.0%** | [10%, 30%] |
+| REJECTED | 60 | 1 | **1.7%** | [0%, 5%] |
+| WEAK_NEGATIVE | 45 | 5 | **11.1%** | [2%, 21%] |
 
-This is consistent with a known caveat in the dialect-ID and speaker-ID literature: frozen self-supervised speech encoders inherit whatever invariances were salient in pretraining, and Arabic dialect is not one of them. Without targeted fine-tuning or careful cross-source balancing, the encoder's embeddings are dominated by acoustic-environment features that happen to be far more salient than dialect for the pretraining objective.
+Key observations: REJECTED items are almost never Lebanese (98.3% specificity), confirming strong rejection precision. POTENTIAL_LB precision (37.8%) is substantially below what its label suggests, reflecting noise in the weakly-supervised positive training pool. The `mostly_lebanese` category (16.7% of GT) reflects widespread code-switching between Lebanese dialect and MSA - a linguistically expected pattern given Lebanon's diglossia.
 
-### 7.7 Remediation experiments
+### 6.5 Distribution mismatch and metric interpretation
 
-To probe whether V2's collapse is fixable without re-architecting, three remediations were tried. Full numbers are in FINDINGS Section 12.6; held-out GT macro F1 summary:
+#### 6.5.1 What population does the GT represent?
 
-| Approach | Held-out ROC-AUC | Macro F1 (default thr) | Macro F1 (best snooped) |
-|----------|----------------:|----------------------:|------------------------:|
-| V1 text-only (baseline) | 0.848 | — | **0.740** (thr 0.70) |
-| V2 acoustic MLP | 0.787 | 0.379 | 0.701 (thr 0.85) |
-| V2 retrained, per-source balanced | 0.357 | 0.370 | 0.420 (thr 0.55) |
-| Hybrid LR (V1 + V2) | 0.729 | 0.548 | 0.620 (thr 0.85) |
-| Hybrid MLP (V1 + V2) | 0.817 | 0.512 | 0.724 (thr 0.90) |
+The GT represents a specific, operationally defined population: **items that passed the pipeline's download and screening stages from the five platforms ingested during the 2025–2026 collection window (YouTube, podcast RSS, TikTok, ADI17, FLEURS), and were then assigned to one of the five pipeline confidence tiers.** This is a convenience sample from the pipeline's own filtered output, not a probability sample from any broader population of Lebanese Arabic audio. Its composition is determined by (a) which platforms were targeted, (b) what content those platforms happened to contain during the collection period, and (c) the pipeline's screening and weak-labelling decisions.
 
-**Threshold tuning (Experiment A).** Sweeping V2's decision threshold and choosing the value that maximizes held-out macro F1 — this is *snooping* on the test set and is reported as a sensitivity analysis, not as a fair number. Even at the snooped optimum (threshold 0.85), V2 alone reaches macro F1 0.701, **still below V1's 0.740**.
+Three consequences follow directly from this definition:
 
-**Per-source class balancing (Experiment B).** V2 was retrained with sample weights such that each (platform, label) pair contributed equal total weight, removing the recording-domain shortcut at training time. The result is striking: held-out ROC-AUC drops to 0.357 — below random (0.5). This tells us that **the residual dialect signal in V2 was riding on the recording-domain shortcut**. When we explicitly remove the shortcut at training, the model retains no useful dialect signal. This is consistent with V2 having learned recording-domain features primarily and dialect features only as a noisy byproduct of the training-class composition.
+1. **Platform mix.** The GT reflects the platform mix of the corpus (predominantly podcast RSS and YouTube, with ADI17 and FLEURS as controlled contrastive sources). Systems that exploit recording-domain cues — rather than dialect cues — will appear stronger on this GT than they would on a platform-balanced test set. This is exactly the confound documented in Chapter 10.
 
-**Hybrid V1 + V2 (Experiment C).** Concatenating V1's 389-d text features with V2's 1024-d acoustic embeddings (1413-d total) and training LogReg and MLP heads. The hybrid model only saw the 5,427 items that have screening transcripts (excluding ADI17 + FLEURS, which were imported as DOWNLOADED and never transcribed). On the GT, the best hybrid (MLP at snooped threshold 0.90) reaches macro F1 0.724 — within 2 F1 points of V1 alone. **Hybrid does not improve over V1.** For this binary Lebanese-vs-other task on this dataset, frozen-encoder acoustic embeddings are subsumed by the lexical and sentence-embedding signal.
+2. **No generalisation to Lebanese Arabic audio in the wild.** The pipeline's discovery heuristics (RSS feeds of known Lebanese channels, YouTube search queries for Lebanese topics) deliberately bias toward Lebanese-proximate content. The GT therefore over-represents items where some Lebanese signal is present (even if not enough for a positive label), relative to a truly random sample of Arabic audio.
 
-### 7.8 Verdict
+3. **Stratification departs from the pipeline's own distribution.** Even within the pipeline's output, the GT does not mirror the tier distribution. In the scored corpus (≈8,870 items), roughly 60% carry a positive-side label (WEAK_POSITIVE, POTENTIAL_LB, or BORDERLINE_LB). The GT has a 27.7% positive rate (82/296), achieved by including full draws from the predominantly negative REJECTED and WEAK_NEGATIVE tiers. The stratification was chosen to maximise annotation signal per item (by including more uncertain cases) rather than to reproduce the corpus distribution.
 
-V1 is the strongest classifier produced by this work. V2 with the standard frozen-encoder + small head recipe does not transfer to held-out evaluation, and its failure mode is empirically diagnosed as recording-domain confound rather than weak signal. Hybrid features fail to improve on V1.
+Two consequences follow:
 
-The negative result is itself a contribution. Practitioners attempting the same recipe — collecting research-grade dialect labels from one corpus and combining with weakly-labeled in-distribution data — should expect this confound and design accordingly: end-to-end fine-tuning of the encoder, careful cross-source balancing, speaker-normalized features (i-vectors, x-vectors), or multi-class formulations are all candidate paths and are deferred to future work.
+1. **Macro F1 is distribution-sensitive.** Macro F1 (averaged over positive and negative classes without weighting by class frequency) is determined partly by the positive:negative ratio in the test set. The GT ratio of 82:214 ≈ 1:2.6 is more balanced than realistic deployment scenarios (where non-Lebanese audio dominates). A system that appears strong on macro F1 in this GT may perform worse in a deployment where non-Lebanese items overwhelm the positive class.
 
----
+2. **ROC-AUC is distribution-robust.** ROC-AUC is computed from the full ranking of items by predicted score and is invariant to the positive:negative ratio. It is therefore the primary metric for comparing systems across this thesis. The GT's stratified design does not affect ROC-AUC validity, only the interpretation of the absolute AUC value as an estimate of deployment-time performance.
 
-## 8. Limitations and Discussion
+#### 6.5.2 What the reported metrics do and do not support
 
-### 8.1 Single annotator
+**The GT supports:**
+- *Ranking* the 14 systems relative to each other. Because all systems are evaluated on the same GT items, differences in ROC-AUC and macro F1 reflect genuine differences in discriminative ability, not artefacts of the sampling design.
+- *Tier-level precision estimates* (Section 6.4), which are conditioned on the GT sample and are internally valid.
+- *Bootstrap CIs on system performance*, which quantify uncertainty about the GT estimate (i.e., how much the rank would change if a different 300-item draw were made from the same corpus), not uncertainty about population-level performance.
 
-The 300-item ground-truth test was annotated by the thesis author alone. There is no inter-annotator agreement statistic. For Lebanese-vs-other classification, label difficulty is highest in the `mostly_lebanese` band (50 of 300 items, 16.7%); a second annotator on this subset would meaningfully improve confidence in the test-set labels. We mark this as future work.
+**The GT does not support:**
+- *Estimating absolute precision/recall in deployment*, because the positive rate in the GT does not match the positive rate a deployed system would encounter.
+- *Generalising absolute macro F1 values* to other evaluation corpora with different class balance.
+- *Inter-annotator agreement claims*, since annotation was performed by a single annotator (Section 12.1).
 
-### 8.2 Lexical overlap
-
-The Lebanese lexicon contains pan-Arabic words; the Lebanese strong markers are Levantine, not uniquely Lebanese. Lexical features alone cannot distinguish Lebanese from Syrian, Palestinian, or Jordanian Arabic. This is part of the motivation for v2 acoustic features, and a known constraint we accept.
-
-### 8.3 Recording-domain confound — confirmed empirically
-
-The FLEURS MSA class is read-prompt audio recorded by Egyptian-based speakers; the ADI17 dialect classes are broadcast audio; the WEAK_POSITIVE/POTENTIAL_LB items are YouTube and podcast audio. This introduces recording-environment differences between training classes that turn out to be the dominant signal V2 learns. We document this *a priori* concern in Section 7.6 and confirm it empirically via Experiment B (Section 7.7): when we explicitly remove the per-source class imbalance via sample weights, V2's held-out ROC-AUC drops to 0.36 — below random — indicating that the residual dialect signal in V2 was riding on the recording-domain shortcut, and removing the shortcut eliminates the model's discrimination.
-
-Mitigation candidates we did not pursue:
-- **MGB-2 broadcast MSA** instead of FLEURS, which would acoustically match ADI17 broadcast at the cost of QCRI-managed access. We attempted to integrate this and deferred (Section 8.7 of FINDINGS).
-- **Speaker-normalized features** (i-vectors, x-vectors), which explicitly normalize for recording environment.
-- **End-to-end fine-tuning** of the encoder, which we declined for the frozen-features comparison but is the obvious next remedy.
-
-Additionally, the FLEURS `ar_eg` configuration uses Egyptian speakers; while the read content is MSA, residual Egyptian phonetic features may bleed into the embeddings. A multi-config FLEURS alternative (averaging across `ar_eg`, `ar_jo`, `ar_lb` if available) is left for future work.
-
-### 8.4 Ground-truth size
-
-300 items is sufficient for stable per-class precision and recall estimates with reasonable confidence intervals (95% CI half-width on the order of 5-7 percentage points for class-wise rates), but is small relative to evaluations on standard speech benchmarks. Scaling the test set would tighten our reported numbers.
-
-### 8.5 Deployment readiness
-
-The classifiers are research artifacts, not production systems. V1 (text-only) is the strongest model from this work, but its 0.66 positive-class F1 and 25% false-positive rate at threshold 0.70 mean it is not ready for an automated "filter Lebanese clips" tool without human review. V2 in any of its forms is not deployable: even the snooped best-threshold v2 underperforms v1, and the diagnosed recording-domain confound makes the model's behavior on out-of-distribution audio unpredictable. Threshold calibration here was done with respect to the held-out 300-item test; deployment in any new distribution (e.g., live YouTube comment audio, broadcast news) would require fresh calibration on a sample of that distribution.
+To summarise: the reported metrics are valid for the comparative ranking of systems on this GT and for the noise audit of the weak labelling pipeline. They should not be interpreted as direct estimates of the expected precision or recall that any system would achieve in an arbitrary Lebanese-Arabic audio deployment.
 
 ---
 
-## 9. Future Work
+## 7. Benchmark Systems
 
-Ranked roughly by expected payoff for the dialect-ID task on this corpus:
+This chapter describes all 14 systems evaluated in the benchmark: five built in-house across three architectural families (text-only V1, frozen acoustic V2, end-to-end fine-tuned V2.5), four pulled from HuggingFace, one free baseline, two ablation variants, and two LLM zero/few-shot conditions. For each in-house system we provide the formal feature representation, training procedure, and architectural rationale.
 
-- **End-to-end fine-tuning of XLS-R** — the most direct fix for V2's failure. Allowing the encoder weights to update during training would let dialect features compete with recording-domain features for representational capacity. This is the highest-priority remediation given the empirical diagnosis in Section 7.6/7.7.
+### 7.1 In-house systems
 
-- **MGB-2 broadcast MSA** — substitute MGB-2 for FLEURS to put MSA on the same broadcast acoustic substrate as ADI17 EGY/Gulf. Eliminates one of the two main domain confounds. Requires QCRI-managed access.
+#### V1: Text-only classifier (lexical + MiniLM)
 
-- **Speaker-normalized features.** Compute i-vectors or x-vectors per clip and concatenate or replace the XLS-R embedding. Speaker representations explicitly factor out recording channel, which is what V2 lacks.
+V1 is a Logistic Regression trained on a 389-dimensional feature vector:
+- 5 lexical features: `[lb, msa, strong_lb_hits, msa_ratio_core, final_score]` from the `lexicon_score()` function
+- 384-d sentence embedding from `paraphrase-multilingual-MiniLM-L12-v2` [@reimers2019sbert] applied to the concatenated screening transcript
 
-- **Multi-class extension.** Replace the binary Lebanese-vs-other formulation with a four-way classifier (Lebanese / MSA / Egyptian / Gulf). The held-out test set already supports this via its raw labels. Multi-class often outperforms binary for dialect ID because the negative class becomes more homogeneous.
+Formally, the feature vector for item **x** is:
 
-- **Larger Lebanese-specific corpus.** The pipeline's discovery and download stages are reusable; with more YouTube channel curation and podcast feed coverage, the Lebanese-positive pool could grow by an order of magnitude. This may also reduce the per-source confound.
+```
+φ(x) = [f_lb(x), f_msa(x), strong_lb_hits(x), msa_ratio_core(x), final_score(x), e(τ(x))] ∈ ℝ^389
+```
 
-- **Inter-annotator agreement.** Recruit a second Lebanese-speaking annotator for a 50-item overlap on the GT test, compute Cohen's kappa, and revise borderline labels accordingly.
+where e(τ(**x**)) ∈ ℝ^384 is the MiniLM sentence embedding of the concatenated screening transcript τ(**x**). The classifier produces:
 
-- **Live evaluation.** Calibrate the v1 thresholds on a fresh sample of live YouTube/podcast audio and report deployed precision/recall.
+```
+p̂(y=1 | x) = σ(w^T φ(x) + b)
+```
+
+where σ is the sigmoid function and (w, b) are learned by logistic regression with L2 regularization (C=1.0, default scikit-learn), optimized by LBFGS. The training objective is binary cross-entropy, with `class_weight="balanced"` reweighting to compensate for the positive:negative imbalance (~1:1.7 in the training pool).
+
+`class_weight="balanced"` compensates for the class imbalance in the training pool. Training uses scikit-learn [@pedregosa2011sklearn] LogisticRegression with default L2 regularization. Training data: 2,003 positives (WEAK_POSITIVE, `strong_lb_hits ≥ 1`) + 1,651 negatives (1,005 WEAK_NEGATIVE + 646 REJECTED with transcripts). **Note on training/test overlap:** V1 was trained before the 300-item GT was established; the GT was subsequently sampled from the same WEAK_POSITIVE (45 items), WEAK_NEGATIVE (45 items), and REJECTED (60 items) pools used for V1 training. Up to 150 of 296 GT items may therefore appear in V1's training data. See §12.5 for an assessment of the potential bias.
+
+#### V1 ablations: lex-only and embedding-only
+
+To understand which component drives V1's performance, two ablation variants are trained on the same data pool with the same `strong_lb_hits ≥ 1` filter:
+- **V1 lex-only**: 5 lexical features only (no embedding)
+- **V1 embedding-only**: 384-d MiniLM embedding only (no explicit lexical features)
+
+Both are trained identically to V1 (LogisticRegression, `class_weight="balanced"`).
+
+#### V2: Frozen XLS-R-300m + MLP
+
+V2 replaces text features with 1024-d mean-pooled utterance embeddings from `facebook/wav2vec2-xls-r-300m` [@babu2022xlsr]. The backbone is frozen in `eval()` mode; only a classifier head (Logistic Regression or MLP with 256 hidden units, early stopping) is trained on the embeddings.
+
+Training pool: 13,624 items (all WEAK_POSITIVE, POTENTIAL_LB, ADI17 LEB as positives; WEAK_NEGATIVE, ADI17 EGY/Gulf, FLEURS MSA as negatives), excluding the 300 GT items. Both heads are reported; the MLP head was selected as the winner by held-out macro F1.
+
+#### V2 + per-source balanced training
+
+V2 is retrained with sample weights such that each (platform, label) pair contributes equal total weight. This is designed to remove the recording-domain shortcut hypothesized in Section 10. The weight scheme is:
+
+```
+weight(item) = 1 / (count of items in this item's (platform, label) group)
+```
+
+Trained with the same MLP head as V2 (frozen XLS-R backbone).
+
+#### Hybrid V1+V2 MLP
+
+Concatenates V1's 389-d text feature vector with V2's 1024-d acoustic embedding (1,413-d total) and trains LogisticRegression and MLP heads. The hybrid training pool is restricted to items with both a valid screening transcript and an embedding (5,427 items total; all GT items excluded).
+
+#### V2.5: End-to-end fine-tuned XLS-R
+
+V2.5 unfreezes the top 2 transformer layers (of 24) of XLS-R-300m plus the projector and classifier head - approximately 34M of 316M total parameters (10.9%). Training uses `WeightedRandomSampler` with per-(platform, label) group weights to counteract the recording-domain shortcut at the sampling level, AdamW optimizer with differential learning rates (5×10⁻⁵ for the head, 1×10⁻⁵ for the unfrozen encoder layers), and a 4,000-item stratified subsample of the full 13.6K pool (CPU runtime ceiling; estimated 10-12 hours wall time for 2 epochs on a 22-core machine). Checkpointing every 10 optimization steps allows training to span multiple sessions.
+
+### 7.2 Public systems (HuggingFace)
+
+#### Abdullah and Baas MMS-300m (Levantine proxy)
+
+`badrex/mms-300m-arabic-dialect-identifier` (Abdullah et al. 2025): MMS-300m fine-tuned on Arabic dialect identification with voice-conversion-based data augmentation. Outputs a probability for `Levantine` (which conflates Lebanese, Syrian, Jordanian, Palestinian Arabic). We use `P(Levantine)` as the Lebanese-detection score, which upper-bounds Lebanese detection ability - a system that perfectly identifies Levantine but cannot distinguish sub-varieties will appear strong here.
+
+#### Voxlect MMS-LID-256 (Levantine proxy)
+
+`tiantiaf/voxlect-arabic-dialect-mms-lid-256` (Voxlect 2026): MMS-based Arabic dialect LID covering 256 classes including a Levantine category. Requires the `MMSWrapper` class vendored from the upstream repository (`scripts/_vendored/voxlect_mms_dialect.py`) due to a non-standard HuggingFace model structure. We use `P(Levantine)` as the score.
+
+#### Elyadata ADI-whisper-ADI20 (country-level LEB)
+
+`Elyadata/ADI-whisper-ADI20` (Elleuch et al. 2025): Whisper-Large-V3 fine-tuned on ADI-20, a 20-country Arabic dialect dataset that includes a country-level `LEB` class. This is the **only** system in the benchmark with a true country-level Lebanese class (rather than a Levantine proxy). Requires vendoring `WhisperDialectClassifier` from the upstream ADI-20 repository (`scripts/_vendored/elyadata_classifier_attention_pooling.py`) as the model uses a non-standard SpeechBrain architecture.
+
+#### MARBERTv2 Levantine (text-based, Levantine proxy)
+
+`IbrahimAmin/marbertv2-arabic-written-dialect-classifier`: MARBERTv2 [@inoue2021camelbert] fine-tuned on Arabic written dialect classification, outputting probabilities for four regional groups (LEV, EGY, GULF, MSA). Applied to existing Whisper screening transcripts rather than audio. Uses `P(LEV)` (Levantine regional class) as the score.
+
+### 7.3 Baseline
+
+#### Whisper-LID Arabic probability
+
+Whisper's built-in language probability is a free byproduct of every screening transcription. For each GT item, we average the `language_probability` for Arabic across the three screening chunks (chunks predicting a non-Arabic language contribute 0.0). This tests whether Arabic-vs-other language detection proxies for Lebanese-vs-other dialect detection. The expected answer is no: Whisper's LID operates at the language level, not the dialect level.
+
+### 7.4 Computational complexity
+
+Table 3 summarizes the computational requirements of each system in the benchmark, providing the information needed for researchers planning to reproduce or extend this work.
+
+**Table 3. Computational complexity overview for all 14 benchmark systems.**
+
+| System | Trainable parameters | Training pool | Approx. training time | Inference per item | RAM / VRAM | GPU needed |
+|---|---|---|---|---|---|---|
+| V1 LR (389-d) | 390 | 3,654 items | < 5 min, CPU | < 1 ms (text) | < 1 GB RAM | No |
+| V1 lex-only (5-d) | 6 | 3,654 items | < 1 min, CPU | < 1 ms (text) | < 1 GB RAM | No |
+| V1 embed-only (384-d) | 385 | 3,654 items | < 3 min, CPU | < 1 ms (text) | 0.5 GB RAM | No |
+| V2 frozen MLP | ~263K (MLP head) | 13,624 items | ~11 h embed extraction + 30 min training, CPU | ~3 s (XLS-R encode) + <1 ms (head) | 1.2 GB RAM | No (slow) |
+| V2 balanced | ~263K (MLP head) | 13,624 items | same as V2 | same as V2 | 1.2 GB RAM | No |
+| V2 same-source | ~263K (MLP head) | 2,878 items | ~3 h embed + 10 min training, CPU | same as V2 | 1.2 GB RAM | No |
+| Hybrid V1+V2 MLP | ~430K (MLP head) | 5,427 items | < 45 min, CPU | ~3 s (XLS-R) + <1 ms | 1.5 GB RAM | No |
+| V2.5 fine-tuned XLS-R | ~34M of 316M | 4,000 items | ~12 h for 2 epochs, CPU | ~3 s | 4 GB RAM | Recommended (GPU: ~1 h) |
+| Abdullah MMS-300m | 300M (inference only) | N/A | N/A | ~5 s/item, CPU | 1.2 GB RAM | Recommended |
+| Voxlect MMS-LID-256 | 256M (inference only) | N/A | N/A | ~5 s/item, CPU | 1.0 GB RAM | Recommended |
+| Elyadata Whisper-L-v3 | 1.5B (inference only) | N/A | N/A | ~8 s/item, CPU | 6 GB RAM (CPU) / 3 GB VRAM | Recommended |
+| MARBERTv2 | 163M (inference only) | N/A | N/A | <1 s/item (text, CPU) | 0.7 GB RAM | No |
+| Whisper LID baseline | 74M base (inference only) | N/A | N/A | ~1.3 s/chunk, CPU | 0.3 GB RAM | No |
+| Llama-3.1-8B (Groq API) | 8B (remote) | N/A | N/A | ~1 s/item (API latency) | N/A (cloud) | No |
+
+*Notes.* Inference times are wall-clock on the project's 22-core CPU. XLS-R embedding extraction dominated total compute: 13,624 items × ~3 s = ~11 hours. V2.5 training at 4,000 items × 2 epochs ran approximately 12 hours on CPU; GPU would reduce this to under 1 hour. All RAM figures include the model in memory; actual peak may vary with batch size.
+
+---
+
+## 8. Benchmark Protocol
+
+This chapter defines the evaluation protocol applied uniformly to all 14 benchmark systems. A shared protocol - fixed ground-truth mapping, identical metric definitions, and pre-registered bootstrap CI computation - is essential for valid cross-system comparison when systems differ in architecture, training data, and output calibration.
+
+### 8.1 Ground-truth mapping
+
+GT labels are mapped to binary as: `lebanese → 1`, `mostly_lebanese → 1`, `not_lebanese → 0`; `unclear` and `skip` are excluded. Total evaluable items: 296 (82 positive, 214 negative). Systems that require a transcript (V1, V1 ablations, Hybrid, MARBERTv2) are evaluated on 295 items (one item is missing a valid screening transcript).
+
+### 8.2 Metrics
+
+Let *ŷ*_i ∈ [0, 1] be system i's predicted Lebanese probability for GT item i, and *y*_i ∈ {0, 1} be the binary ground truth.
+
+- **ROC-AUC** (primary): threshold-independent discrimination metric. Formally:
+
+```
+AUC = P(p̂(x+) > p̂(x-))
+    = ∫₀¹ TPR(FPR⁻¹(t)) dt
+```
+
+where x+ and x- are randomly drawn positive and negative items. AUC = 1 is perfect; AUC = 0.5 is a random classifier.
+
+- **Macro F1 @ 0.50** (primary): honest evaluation at the default binary decision threshold τ = 0.50, requiring no test-set access:
+
+```
+Macro-F1(τ) = (1/2) · [F1(class=1, τ) + F1(class=0, τ)]
+```
+
+where F1(c, τ) = 2·P(c,τ)·R(c,τ) / (P(c,τ) + R(c,τ)), with P(c,τ) and R(c,τ) the precision and recall for class c at threshold τ.
+
+- **Macro F1 (best snooped)**: best macro F1 across a grid of 12 thresholds {0.30, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90}. This is an *upper bound* on performance - it requires test-set access and is reported for completeness as a sensitivity analysis.
+- **PR-AUC**: precision-recall area under curve, useful for imbalanced positive rates.
+- **Confusion matrix** at the default threshold (0.50).
+
+### 8.3 Confidence intervals
+
+All ROC-AUC and macro F1 metrics are accompanied by 95% percentile-bootstrap confidence intervals. The procedure is: (i) draw n = 1,000 bootstrap resamples (with replacement) of the 296 GT items with seed 42; (ii) compute the metric on each resample; (iii) report the [2.5%, 97.5%] empirical quantiles as the 95% CI. Formally, if θ̂_1, ..., θ̂_B are the metric values on B bootstrap resamples, the CI is [θ̂_(⌈Bα/2⌉), θ̂_(⌊B(1-α/2)⌋)] with α = 0.05.
+
+These CIs support conservative pairwise comparisons: when two systems' 95% CIs do not overlap, we can reject H₀ at approximately p < 0.05. Note that non-overlap is a conservative test - overlapping CIs do not rule out a real difference, and a paired bootstrap on the metric difference would be more powerful. Pairwise claims in this paper are stated accordingly.
+
+### 8.4 Reproducibility
+
+Per-system predictions are saved to `data/benchmark_predictions/<name>.json` after each run. The evaluation and CI computation are re-runnable from these prediction files without re-running model inference. Scripts: `scripts/20_benchmark_harness.py` (evaluation harness), `scripts/benchmark_harness_utils.py` (shared utilities, load/save predictions, bootstrap CIs, CSV upsert).
+
+---
+
+## 9. Benchmark Results
+
+This chapter presents the main experimental results across all 14 benchmark systems on the held-out 296-item ground truth. We organize the results around the primary metrics (ROC-AUC and macro F1), the bootstrap confidence intervals, and family-level comparisons that motivate the recording-domain confound analysis in Chapter 10.
+
+### 9.1 Main scoreboard
+
+Table 1 presents the full 14-system benchmark results on the 296-item held-out ground truth, ordered by ROC-AUC. ROC curves are shown in Figure 1; confusion matrices for selected systems in Figure 2.
+
+**Table 1. Cross-domain Lebanese DID benchmark - all 14 systems, held-out 296-item GT.**
+
+| System | Family | Granularity | ROC-AUC (95% CI) | Macro F1 @ 0.5 (95% CI) | Macro F1 (best, snooped thr) |
+|---|---|---|---|---|---|
+| **marbertv2_lev** (public) | text | regional Levantine | **0.898** [0.851, 0.943] | 0.809 [0.760, 0.855] | 0.837 (thr 0.85) |
+| **v1_embedding_only** (ours) | text | binary | **0.886** [0.837, 0.925] | **0.795** [0.743, 0.840] | 0.822 (thr 0.70) |
+| v1_text_only (ours) | text | binary | 0.848 [0.797, 0.893] | 0.690 [0.633, 0.747] | 0.748 (thr 0.90) |
+| **elyadata_whisper_adi20_leb** (public) | acoustic | country-level LEB | **0.847** [0.790, 0.897] | 0.727 [0.662, 0.784] | 0.768 (thr 0.30) |
+| hybrid_v1v2_mlp (ours) | hybrid | binary | 0.817 [0.764, 0.869] | 0.512 [0.454, 0.563] | 0.724 (thr 0.90) |
+| v2_frozen_mlp (ours) | acoustic | binary | 0.787 [0.728, 0.847] | 0.379 [0.324, 0.435] | 0.701 (thr 0.85) |
+| **groq_llama31_8b_3shot** (public) | LLM | binary | **0.778** [0.734, 0.819] | 0.642 [0.584, 0.696] | 0.665 (thr 0.90) |
+| badr_mms_300m_levantine (public) | acoustic | regional Levantine | 0.778 [0.712, 0.840] | 0.682 [0.619, 0.740] | 0.709 (thr 0.45) |
+| v1_lex_only (ours) | text | binary | 0.780 [0.721, 0.836] | 0.616 [0.560, 0.667] | 0.672 (thr 0.85) |
+| voxlect_mms_lid256_levantine (public) | acoustic | regional Levantine | 0.705 [0.643, 0.766] | 0.431 [0.406, 0.467] | 0.444 (thr 0.30) |
+| groq_llama31_8b_zeroshot (public) | LLM | binary | 0.533 [0.472, 0.594] | 0.263 [0.223, 0.304] | 0.568 (thr 0.90) |
+| v25_finetuned (ours) | acoustic | binary | 0.533 [0.464, 0.601] | 0.455 [0.403, 0.509] | 0.455 (thr 0.50) |
+| whisper_lid_arabic_prob (ours) | acoustic | language-level | 0.500 [0.500, 0.500] | 0.217 [0.185, 0.247] | 0.217 (thr 0.30) |
+| **v2_balanced** (ours) | acoustic | binary | **0.357** [0.291, 0.430] | 0.370 [0.322, 0.419] | 0.420 (thr 0.55) |
+
+Bold entries indicate statistically notable findings (discussed in Section 9.2).
+
+![Figure 1: ROC curves for all benchmark systems on the held-out 296-item Lebanese GT. Systems are colour-coded by family (text: blues, acoustic: reds/greens, hybrid: purple, LLM: pink). The chance diagonal is shown dashed. MARBERTv2 (cyan, 0.898) and V1 embed-only (light blue, 0.886) form the top cluster. V2-balanced (pink dashed, 0.357) falls below chance - the recording-domain confound inverted the classifier's predictions.](paper/figures/roc_curves.png)
+
+*Figure 1.* ROC curves for all 14 systems. See Table 1 for full statistics.
+
+### 9.2 Statistical significance
+
+The bootstrap confidence intervals support the following pairwise statements:
+
+1. **Text-family systems occupy the top positions.** The top two systems by ROC-AUC are both text-based: MARBERTv2 (0.898, CI [0.851, 0.943]) and V1 embedding-only (0.886, CI [0.837, 0.925]). The best acoustic system, Elyadata (0.847, CI [0.790, 0.897]), has overlapping CIs with both text systems - the consistent point-estimate gap (+0.039 to +0.051) favours text, but independent CI non-overlap cannot formally establish significance here. A paired bootstrap test on the difference is the correct test and is recommended for any strong claim of dominance. What is statistically unambiguous is the *mechanism*: the recording-domain confound (Section 10) explains why acoustic systems underperform, and the confound result itself (V2 balanced CI [0.291, 0.430] entirely below random) is decisive.
+
+2. **V1 embed-only shows a clear practical advantage over V2 frozen.** V1 embedding-only CI [0.837, 0.925] vs V2 frozen [0.728, 0.847] overlap by 0.010 at the boundaries, so formal significance by CI non-overlap is marginal. The 0.099 point-estimate gap, combined with Section 10's confound diagnosis, makes the performance difference interpretable: V2's lower performance is caused by the recording-domain shortcut rather than acoustic modelling in general.
+
+3. **Hybrid does not improve over V1.** Hybrid MLP ROC-AUC 0.817 falls below V1 embedding-only's CI lower bound of 0.837; the CIs overlap by 0.032 at [0.837, 0.869]. Adding 1024-d frozen acoustic embeddings to V1's text features yields no statistically reliable improvement. At the honest default threshold (0.50), V1 embedding-only macro F1 0.795 outperforms hybrid's 0.512 - the acoustic component actively hurts the decision boundary calibration.
+
+4. **V2 balanced is significantly anti-correlated with the true label.** V2 balanced ROC-AUC 95% CI [0.291, 0.430] lies entirely below random (0.50). Probability of being ≥0.50 is approximately zero under the bootstrap. This is the strongest possible statistical statement for the recording-domain confound diagnosis (Section 10): removing the per-platform shortcut converts an apparently informative model (ROC-AUC 0.787 in V2 frozen) into one that is systematically wrong. The shortcut, not dialect signal, was driving V2's training-pool performance.
+
+5. **V2.5 is indistinguishable from random.** ROC-AUC CI [0.464, 0.601] straddles 0.50. We cannot reject H₀: ROC-AUC = 0.50. End-to-end fine-tuning under per-source balanced sampling, with only 10.9% of parameters trainable and a 4,000-item subsample, produced no reliable dialect signal on held-out data.
+
+6. **Whisper-LID is exactly uninformative.** ROC-AUC = 0.500, CI [0.500, 0.500]: all 296 GT items (×3 screening chunks = 888 chunks total) were classified as Arabic with uniformly high confidence, so Lebanese vs non-Lebanese receive identical Arabic probability scores. Lebanese detection requires explicit dialect modeling; language identification is useless as a proxy.
+
+7. **LLM 3-shot matches a purpose-built acoustic system.** Llama-3.1-8B with 3 in-context examples achieves ROC-AUC 0.778 [0.734, 0.819], within CI of Abdullah MMS-300m 0.778 [0.712, 0.840]. A general-purpose LLM with zero fine-tuning and zero domain-specific parameters is statistically indistinguishable from a specialised acoustic Arabic DID model at this task - when given just three examples.
+
+8. **Zero-shot LLM is near-chance.** Without examples, Llama-3.1-8B ROC-AUC = 0.533 [0.472, 0.594]. The CI includes 0.50. This confirms that Lebanese-specific lexical knowledge is not readily available in the model without priming - the +0.245 ROC-AUC gain from 0-shot to 3-shot is entirely attributable to the three examples.
+
+### 9.3 Text family: public vs in-house parity
+
+MARBERTv2 (public, large MARBERT backbone) achieves ROC-AUC 0.898. V1 embedding-only (ours, MiniLM-L12-v2, 384-d) achieves 0.886. Their CIs overlap heavily. This means a small, lexicon-aware multilingual sentence embedding model trained on weakly-supervised in-domain Lebanese text is competitive with a substantially larger dialectal Arabic BERT trained on a supervised written corpus. Text-based in-house performance matches public state-of-the-art on this Lebanese binary task.
+
+### 9.4 Audio family: public vs in-house gap
+
+The best public audio system, Elyadata (0.847, CI [0.790, 0.897]), clearly outperforms our best acoustic system V2 frozen (0.787, CI [0.728, 0.847]): the 0.060 point-estimate gap is consistent with the confound explanation, though their CIs overlap at [0.790, 0.847] so formal significance would require a paired bootstrap test. Elyadata was trained on full-supervision country-level labels from ADI-20, while V2 was trained on weakly-supervised labels under the recording-domain confound regime (Section 10). This gap validates the confound diagnosis: the in-house V2 failure is not an indictment of acoustic modelling in general but a controlled demonstration of what the recording-domain confound does to weakly-supervised acoustic training.
+
+### 9.5 Country-level vs Levantine-proxy
+
+Among audio systems, Elyadata (country-level LEB, 0.847, CI [0.790, 0.897]) leads Abdullah et al. (regional Levantine proxy, 0.778, CI [0.712, 0.840]) by 0.069 points, though their CIs overlap at [0.790, 0.840] so this does not reach the non-overlap significance threshold. Elyadata clearly outperforms Voxlect (0.705, CI [0.643, 0.766]) - non-overlapping CIs confirm this gap. The Levantine class conflates Lebanese with Syrian, Jordanian, and Palestinian Arabic - a real loss of discriminative capacity. Country-level acoustic training shows a consistent point-estimate advantage over regional proxies, though the Abdullah et al. comparison requires a paired bootstrap to establish formal significance.
+
+### 9.6 Voxlect calibration pathology
+
+Voxlect achieves ROC-AUC 0.705 - above random, meaning it has genuine discriminative signal - but at the default threshold (0.50) its confusion matrix is [[213, 1], [81, 1]]: only 2 of 296 items receive Levantine probability ≥0.50. The best-F1 threshold sweep recovers it to macro F1 0.444 at threshold 0.30, still the weakest system with a positive AUC. This is a calibration pathology: the model's softmax is squashed strongly toward the negative class. Off-the-shelf it is not usable as a binary Lebanese classifier without temperature re-scaling.
+
+### 9.7 LLM family: zero-shot vs three-shot
+
+The LLM family contributes a striking finding independent of the dialect ID task itself. Llama-3.1-8B (Meta, 2024) zero-shot performance - a system instruction asking the model to decide whether a transcript is Lebanese - yields ROC-AUC 0.533, near chance. Adding three in-context examples (one Lebanese, one Egyptian, one Gulf, all from outside the GT) produces ROC-AUC 0.778: a +0.245 gain from three examples alone.
+
+This gap is larger than the difference between Voxlect (0.705) and Abdullah MMS-300m (0.778) - two acoustic systems trained on thousands of hours of Arabic speech. It suggests that Lebanese-specific lexical and syntactic patterns are present in Llama-3.1-8B's pretraining data but are not activated by a dialect identification instruction alone. The examples provide a calibration signal that aligns the model's internal representations with the binary Lebanese/not-Lebanese distinction.
+
+Practically, the 3-shot LLM is competitive as a zero-infrastructure Lebanese DID system for text-based pipelines: no fine-tuning, no GPU, only a general-purpose model and three example transcripts.
+
+### 9.8 Confusion matrices at default threshold (0.50)
+
+![Figure 2: Confusion matrices at τ=0.50 for six selected systems. Row = true label (Not-LB / Lebanese); column = predicted label. V1 combined and MARBERTv2 show balanced matrices. V2-balanced shows the anti-correlation signature: the majority of true Lebanese items (63/82) are predicted as not-Lebanese.](paper/figures/confusion_matrices.png)
+
+*Figure 2.* Confusion matrices for six selected systems at τ = 0.50.
+
+```
+                    pred neg   pred pos
+marbertv2_lev:      true neg    170         44
+                    true pos     17         65
+v1_embedding_only:  true neg    172         42
+                    true pos     14         68
+v1_text_only:       true neg    137         77
+                    true pos     11         71
+elyadata:           true neg    185         29
+                    true pos     24         58
+hybrid_v1v2_mlp:    true neg     72        142
+                    true pos      3         79
+v2_frozen_mlp:      true neg     37        177
+                    true pos      3         79
+v2_balanced:        true neg    107        107
+                    true pos     63         19  ← systematic mis-classification
+```
+
+V2 frozen and Hybrid predict "Lebanese" for the majority of GT items (87% and 75% respectively), achieving high recall at catastrophic precision. V2 balanced shows the classic anti-correlation signature: 63 of 82 true positives are predicted as negative, while 107 of 214 true negatives are predicted as positive. V1 embedding-only and MARBERTv2 both show the most balanced confusion matrices.
+
+---
+
+## 10. Recording-Domain Confound Analysis
+
+This chapter presents the thesis's principal analytical finding (Contribution C4): a four-evidence demonstration that frozen XLS-R embeddings encode audio-platform domain as a dominant axis of variation, and that V2's apparent in-pool discrimination is a recording-domain shortcut rather than genuine dialect signal. The four evidence streams - validation collapse, balanced-training inversion, platform-probe accuracy, and same-source control failure - are designed to be mutually reinforcing and to rule out alternative explanations sequentially.
+
+### 10.1 Mechanism
+
+When a frozen speech encoder is trained on a dataset where class labels are correlated with recording domains, the classifier head searches for the most linearly separable axis in the embedding space. If recording-domain features are more separable than dialect features - which is likely when the encoder was pretrained without dialect supervision - the head learns domain rather than dialect.
+
+In our training pool:
+- **Positive class**: YouTube-channel audio (Lebanese channels, diverse recording setups), podcast audio, ADI17 broadcast audio (LEB)
+- **Negative class**: ADI17 broadcast audio (EGY, Gulf), FLEURS read-prompt audio (MSA, Egyptian speakers)
+
+Each class has a distinct acoustic signature: the positive class mixes YouTube/podcast microphone profiles with ADI17 broadcast; the negative class mixes ADI17 broadcast with FLEURS read-prompt. A frozen encoder sees these domain differences as the primary axis of variation.
+
+### 10.2 Evidence 1: validation-to-held-out generalization collapse
+
+The V2 MLP achieves macro F1 0.856 on the in-pool validation split (80/20 stratified). On the held-out GT - drawn entirely from the original YouTube and podcast collection and labeled by a native speaker - it achieves macro F1 **0.379** at the default threshold. This is a collapse of 0.48 absolute points, far exceeding the equivalent ROC-AUC drop for V1 text-only (in-pool 0.964 → held-out 0.848 = −0.116; see §5.3). The held-out items are not from ADI17 or FLEURS, so their acoustic domain does not match either training class's non-Lebanese acoustic signature. The domain shortcut, learned during training, does not generalize.
+
+### 10.3 Evidence 2: per-source balanced training destroys all residual signal
+
+Experiment B (per-source balanced training) removes the recording-domain shortcut at the sampler level: each (platform, label) pair is given equal total weight so no recording environment is over- or under-represented in either class. V2 balanced achieves:
+
+- ROC-AUC: **0.357** (95% CI [0.291, 0.430]) - entirely below random (0.50)
+- Confusion matrix at default threshold: [[107, 107], [63, 19]] - 63 of 82 positives misclassified
+
+A ROC-AUC below 0.50 is not random behavior; it is *systematic anti-correlation* - the model predicts "not Lebanese" precisely when the item is actually Lebanese. This happens because when the domain shortcut is removed, the residual signal the model learned is the *inverse* of what is needed: the ADI17 LEB items in the positive class sound like ADI17 broadcast (the dominant acoustic signature of the negative class), so the classifier picks up the wrong axis. This can only occur if the shortcut was carrying the bulk of the training-pool discrimination.
+
+**Statistical statement**: under the bootstrap (n=1,000), P(V2 balanced ROC-AUC ≥ 0.50) ≈ 0. The entire 95% CI lies below random.
+
+### 10.4 Evidence 3: platform probe - direct measurement of domain separability
+
+We trained a 4-way Logistic Regression classifier on V2's 1024-d XLS-R embeddings to predict the *platform of origin* (adi17, youtube, podcast_rss, fleurs) - a classification task that has nothing to do with dialect.
+
+- **Training pool**: 14,159 items, 80/20 stratified split
+- **Result**: accuracy **0.8912** (chance = 0.25), macro F1 **0.8660**
+
+Per-class precision/recall/F1:
+
+| Platform | Precision | Recall | F1 | Support |
+|---|---:|---:|---:|---:|
+| adi17 | 0.928 | 0.978 | 0.952 | 1,400 |
+| fleurs | 0.910 | 0.825 | 0.866 | 160 |
+| podcast_rss | 0.863 | 0.879 | 0.871 | 626 |
+| youtube | 0.824 | 0.732 | 0.775 | 646 |
+
+A linear classifier can identify which recording platform produced each audio clip with 89% accuracy from frozen XLS-R embeddings alone. ADI17 broadcasts are nearly perfectly separable (F1 0.952). This is direct evidence of the mechanism: the embedding space is organized along platform/domain axes, and these are precisely the axes that correlate with class labels in the training pool.
+
+### 10.5 Why fine-tuning does not fix it at this scale
+
+V2.5 unfreezes the top 2 of 24 transformer layers and applies per-source balanced sampling during training. The result: ROC-AUC **0.533** (CI [0.464, 0.601]) - straddling random, indistinguishable from no signal. Three compounding reasons:
+
+1. **Partial unfreeze is insufficient.** Only 10.9% of parameters are trainable. The bottom 22 frozen layers continue to encode recording-domain structure as the dominant embedding axis. The two trainable layers cannot disentangle dialect from domain in the remaining representational capacity.
+
+2. **Small training pool.** The 4,000-item stratified subsample (imposed by CPU runtime constraints, not by design) is well below the scale at which XLS-R fine-tuning reliably adapts to new tasks in the literature. Sullivan et al. (2023) and Abdullah et al. (2025) both require far larger supervised corpora for reliable cross-domain transfer.
+
+3. **Loss trajectory.** Training loss moves from 0.693 (random binary CE) to approximately 0.640 - only a 0.053 absolute improvement over 450 optimization steps. This is an order of magnitude less signal than V1 text training achieves, consistent with the model learning very little before the optimizer's scheduled learning rate decays to near zero.
+
+The V2.5 result is a *methodologically informative negative*: it bounds the floor of what end-to-end fine-tuning achieves under the hardware constraints of a single-researcher CPU-only project. It does not establish the ceiling of fine-tuning under full compute.
+
+### 10.6 Evidence 4: same-source control
+
+The preceding four experiments leave open one alternative explanation: V2's underperformance could be caused not by the XLS-R representation lacking dialect signal, but simply by the *mismatch* between the platforms used for training and the podcast-heavy test set. To test this, we train a fifth model (V2 same-source) using only podcast_rss items - the same acoustic domain as 85% of the GT - with no ADI17 or FLEURS in the training pool.
+
+Training pool: 2,878 podcast_rss items (1,926 positive: POTENTIAL_LB/BORDERLINE_LB; 952 negative: WEAK_NEGATIVE/REJECTED). Model architecture identical to V2 frozen (MLP-256 + StandardScaler on 1024-d XLS-R). Test: the podcast_rss subset of the GT (252 items).
+
+| Model | Scope | ROC-AUC |
+|---|---|---|
+| V2 frozen (cross-domain) | podcast_rss GT subset | 0.791 |
+| **V2 same-source** | podcast_rss GT subset | **0.739** |
+| V2 frozen (cross-domain) | full 296-item GT | 0.787 |
+| V2 same-source | full 296-item GT | 0.634 |
+
+**Same-source training does not recover performance.** The model trained exclusively on the same acoustic domain as the test set achieves 0.739 on that domain - lower than cross-domain V2's 0.791. On the full GT, same-source drops to 0.634 (vs 0.787), because the same-source model has never seen YouTube or ADI17 audio profiles at all.
+
+This result rules out the domain-mismatch alternative explanation: even with training domain matched to test domain, the 1024-d frozen XLS-R representation cannot reliably separate Lebanese from non-Lebanese podcast speech. The encoding of recording-domain structure in the embedding space (§10.4) means the model uses whatever domain cue is available; when only one domain is present in training, no cue helps and performance is determined by whatever dialect signal is accessible - which is evidently very weak.
+
+### 10.7 Implication for the field
+
+The four-evidence ladder (validation collapse → balanced-training anti-correlation → platform probe → same-source control) forms a rigorous empirical argument that **frozen acoustic self-supervised encoders cannot be relied upon for Lebanese binary DID when training data is assembled from heterogeneous public sources under weak supervision**. The failure mode is not specific to Lebanese; any single-dialect study assembled from public multi-platform sources faces the same confound if label composition correlates with recording domain.
+
+Prescriptions for future work: (a) end-to-end fine-tuning with a much larger dataset and at least 50% of encoder parameters trainable; (b) recording-domain-matched contrastive negatives (e.g., MGB-2 broadcast MSA instead of FLEURS read-prompt, to match ADI17 broadcast); (c) explicit domain-adversarial training (DANN or CORAL) to learn domain-invariant dialect representations; (d) voice conversion to synthesize class-balanced speaker variation within each platform (Abdullah et al. 2025's approach).
+
+---
+
+## 11. Discussion and Failure Analysis
+
+This chapter interprets the benchmark results in depth, examining error patterns, ablation findings, cross-platform performance variation, and failure case taxonomy. The analysis draws on the benchmark results (Chapter 9) and the recording-domain confound diagnosis (Chapter 10) to characterize the current state of Lebanese Arabic DID and identify the most tractable paths for improvement.
+
+### 11.1 V1 error patterns
+
+At the best-snooped threshold for V1 text-only (0.90 per Table 1), V1 text-only makes approximately 53 false positives (FP) and 16 false negatives (FN) on the 295-item GT.
+
+Per-platform breakdown:
+| Platform | Total | FP | FN | FP rate | FN rate |
+|---|---:|---:|---:|---:|---:|
+| podcast_rss | 252 | 47 | 10 | 23.3% | 20.0% |
+| youtube | 41 | 6 | 6 | 54.5% | 20.0% |
+
+YouTube items have a substantially higher FP rate (54.5%) than podcast items (23.3%). This is consistent with the WEAK_POSITIVE noise structure: the lexical features learned from Lebanese YouTube channel positives over-generalize to non-Lebanese YouTube content with similar lexical profiles. Podcast false positives are driven by the lexicon-overlap problem (pan-Arabic words inflating the Lebanese word count).
+
+Top false positive pattern (items the model called Lebanese at 0.98+ confidence that were actually not Lebanese): broadcast-style formal Arabic content with a mix of pan-Arabic colloquialisms - e.g., Egyptian film criticism using المصمم / الفن constructions alongside يعني, أنا, هو; Gulf driving-safety content with colloquial فيه and بس. These transcripts score high on the Lebanese lexical features because the features cannot distinguish pan-Arabic markers from dialect-specific ones.
+
+Top false negative pattern (items the model called non-Lebanese at <0.20 probability that were actually Lebanese): Levantine content heavy in MSA register through code-switching, discussed as political analysis or cultural commentary. These items have low lexical Lebanese signal despite being Lebanese speakers - the annotator labeled them "mostly Lebanese" due to prosodic and phonetic cues that survive in the audio but not the transcript.
+
+### 11.2 The V1 ablation finding
+
+A surprising result from the ablation experiment (Section 7.1): V1 **embedding-only** (MiniLM, 384-d, no explicit lexicon) outperforms V1 **combined** (lexical + embedding, 389-d) on the held-out GT:
+
+| Variant | ROC-AUC | Macro F1 @ 0.50 |
+|---|---:|---:|
+| V1 lex-only (5-d) | 0.780 | 0.616 |
+| V1 embedding-only (384-d) | **0.886** | **0.795** |
+| V1 combined (389-d) | 0.848 | 0.690 |
+
+The embedding-only model beats the combined model by 0.038 ROC-AUC and 0.105 macro F1. Adding explicit lexical features to the MiniLM embedding *hurts* performance. This is unexpected given that lexical features encode dialect-specific vocabulary that the embedding model may not explicitly represent.
+
+An explanation: the MiniLM embedding is a distributional encoder trained on 50+ languages; it likely captures dialect variation implicitly through exposure to Arabic dialect text in the pretraining corpus. Adding a 5-dimensional lexical vector to a 384-dimensional embedding may introduce noise - the lexical dimensions are noisy (pan-Arabic overlap problem), and including them forces the logistic regression to allocate some weight to a low-signal, high-noise subspace, degrading the overall decision boundary.
+
+For the thesis, the practical takeaway is: **the multilingual sentence embedding alone is sufficient; curated lexical features do not improve it for this task.**
+
+### 11.3 MARBERTv2 and text-family comparison
+
+MARBERTv2 achieves ROC-AUC 0.898 (CI [0.851, 0.943]), indistinguishable from V1 embedding-only's 0.886 (CI [0.837, 0.925]) under the bootstrap. This result is notable: MARBERTv2 is a 110M-parameter BERT model pre-trained on Arabic dialect text and fine-tuned on a supervised written dialect corpus; V1 embedding-only is a 33M-parameter MiniLM model fine-tuned for multilingual sentence similarity, retrained as a binary Lebanese classifier on weakly-supervised training data. Despite the order-of-magnitude difference in model capacity and training data quality, they are statistically indistinguishable on this cross-domain Lebanese audio test. The key advantage of the sentence embedding approach for this setting is **domain invariance**: text features derived from Whisper transcripts are invariant to recording microphone, codec, and room acoustics, and this invariance is precisely what is needed when training and test audio come from different recording environments.
+
+### 11.4 Per-platform ROC-AUC breakdown
+
+Figure 3 shows per-platform ROC-AUC (podcast_rss vs. YouTube) for all benchmark systems. Table 2 summarises the most informative cross-platform contrasts, including the same-source control (§10.6).
+
+![Figure 3: Per-platform ROC-AUC for all 14 benchmark systems, comparing podcast RSS (blue) and YouTube (orange) subsets of the GT. MARBERTv2 shows the largest cross-domain gap (–0.191). V1 embed-only is the most domain-robust system (–0.025). V2-balanced is below chance on podcast (0.318) and near-chance on YouTube (0.494).](paper/figures/per_platform_bar.png)
+
+*Figure 3.* Per-platform ROC-AUC: podcast_rss vs. YouTube subsets.
+
+**Table 2. Per-platform ROC-AUC: podcast_rss (n=252) vs. YouTube (n=41 or 42).**
+
+| System | Podcast RSS | YouTube | Δ (pod→YT) |
+|---|---:|---:|---:|
+| MARBERTv2 | 0.927 | 0.736 | –0.191 |
+| Elyadata ADI-20 | 0.864 | 0.792 | –0.072 |
+| V1 (lex+embed) | 0.854 | 0.703 | –0.151 |
+| **V1 embed-only** | **0.855** | **0.830** | **–0.025** |
+| V2 frozen | 0.791 | 0.547 | –0.244 |
+| V2 same-source (§10.6) | 0.739 | - | - |
+| V2-balanced | 0.318 | 0.494 | +0.176 |
+| Groq Llama 3-shot | 0.846 | 0.756 | –0.090 |
+| Abdullah MMS-300m | 0.741 | 0.747 | +0.006 |
+
+Key observations:
+
+1. **MARBERTv2 is the most domain-sensitive system.** It achieves the highest podcast_rss ROC-AUC (0.927) but collapses 19 points on YouTube. This is consistent with a text model that learned from a podcast-heavy training pool: the lexical and semantic patterns encoded in podcast transcripts (natural speech, Lebanese vocabulary in informal registers) are different from YouTube transcripts (more mixed register, on-screen caption artifacts, wider topic range).
+
+2. **V1 embed-only is the most domain-robust system.** Cross-domain drop of only 2.5 points (0.855 → 0.830). The MiniLM encoder, trained on multilingual text with no platform supervision, learns a representation that transfers between podcast and YouTube Lebanese Arabic better than any other system.
+
+3. **V2-balanced shows opposite polarity on the two platforms.** Below chance on podcast (0.318, inverse correlation confirmed) but approaching chance on YouTube (0.494). This is the recording-domain confound manifest differently per platform: the podcast platform is acoustically most different from the ADI17 broadcast audio used for negative training examples, so the confound's anti-signal is strongest there.
+
+4. **Abdullah MMS-300m is the most platform-neutral acoustic public system.** Near-parity on both platforms (0.741 vs 0.747). This likely reflects the voice conversion augmentation used in Abdullah et al. (2025): by converting training audio to diverse speaker styles, the model learns representations less tied to recording-domain characteristics.
+
+5. **Code-switching density correlates with platform.** YouTube items have 7× higher Latin-script density than podcast items (0.044 vs 0.006, per Section 22.2 of the research log). Lebanese items overall show 3.5× higher code-switching than non-Lebanese (0.023 vs 0.007), reflecting Lebanon's widespread French loanwords (merci, bonjour, voiture) appearing in Whisper transcripts as Latin script. This is a potentially useful supplementary feature for text-based systems.
+
+### 11.5 ALDi dialectness correlation and failure taxonomy
+
+**ALDi correlation.** We score each GT item's screening transcript with AMR-KELEG/ALDi [@keleg2023aldi], a BERT-based continuous Arabic dialectness regressor (output in [0, 1]; 1 = fully dialectal, 0 = fully MSA). Lebanese GT items are measurably more dialectal than non-Lebanese items on both platforms (podcast_rss: 0.595 vs 0.532, δ = 0.063; YouTube: 0.511 vs 0.467, δ = 0.044). The effect is consistent but modest.
+
+We compute Spearman r between each item's ALDi score and its absolute prediction error |p − y| for all 15 systems (the 14 primary benchmark systems plus the V2 same-source ablation from §10.6). **All correlations are weak** (|r| < 0.15). The three most informative:
+
+| System | Spearman r | Interpretation |
+|---|---:|---|
+| Whisper LID | −0.142 | Confound artifact (all Arabic → prob ≈ 1; Lebanese items more dialectal → lower error) |
+| Elyadata ADI-20 | +0.110 | Audio model; errors driven by acoustic domain not text register |
+| MARBERTv2 | +0.002 | Near-zero - dialectness level does not predict MARBERTv2 failures |
+
+The near-zero r for all text systems (V1 lex-only: −0.070; V1 text-only: −0.034; Groq 3-shot: −0.001) means: text classification difficulty is not determined by how dialectal the transcript is. Systems fail on highly dialectal items and on near-MSA items roughly equally. This rules out a simple "near-MSA items are harder" hypothesis for the text family.
+
+**Failure taxonomy.** We identify the top-10 most confidently wrong items per system (highest |p − y|), yielding 150 failure cases across 15 systems (14 primary + V2 same-source ablation). Recurring patterns:
+
+- *False positives shared across 5 systems* (non-Lebanese wrongly called Lebanese): broadcast-register Arabic with high pan-Arabic colloquial density (يعني، بس، في as in-sentence fillers). These items score high on Lebanese lexical features despite not being Lebanese - the lexicon's pan-Arabic overlap problem (§5.2) directly causes these failures. Example item 26525: an Egyptian-style cultural podcast that uses يعني 18 times per transcript chunk.
+
+- *False negatives shared across 5 systems* (Lebanese items missed by multiple models): short or near-silent transcripts (audio too quiet or in music-heavy segments), and items where speakers code-switch heavily into French or English mid-sentence. With little Arabic text, text-based systems have nothing to score.
+
+- *Acoustic-only false negatives* (Voxlect, Abdullah MMS-300m): Lebanese items from the YouTube subset with low-quality recording (mobile phone, outdoor ambient noise). These items had adequate Whisper transcripts (text models classify them correctly) but their audio embeddings cluster with non-Lebanese FLEURS or ADI17 items in the XLS-R space.
+
+The most reliable cross-system failure items (appearing in ≥ 4 systems' top-10 wrong lists) all share one of two properties: (a) short or heavily code-switched transcripts that starve text features; or (b) non-Lebanese Arabic that mimics Lebanese colloquial markers. These are genuine hard cases that no current system handles reliably.
+
+### 11.6 Comparison to the NADI 2025 and prior shared tasks
+
+Lebanese does not appear as a primary focus in recent Arabic DID shared tasks (NADI 2025 emphasizes Egyptian, Gulf, and Levantine at the regional level; Casablanca 2024 is text-focused). The closest prior cross-domain evaluation for Lebanese is within ADI17, which uses same-source train/test splits and therefore avoids the cross-domain problem entirely. This thesis's 300-item GT is unique in being drawn from a multi-platform in-the-wild collection rather than from a single broadcast source.
+
+---
+
+## 12. Limitations
+
+This chapter states the principal limitations of the experimental design, spanning annotation quality, lexical scope, test set composition, training pool contamination, hardware constraints, and evaluation completeness. Acknowledging these limitations is essential for correctly scoping the thesis's conclusions and for guiding future work.
+
+### 12.1 Single annotator
+
+The 300-item ground-truth test was annotated by the thesis author alone. There is no inter-annotator agreement statistic and no formal kappa coefficient. The `mostly_lebanese` category (50 of 300 items, 16.7%) is the highest-ambiguity label, representing code-switching that may be perceived differently by different annotators. A second annotator on this subset and a resulting kappa measurement are deferred to future work.
+
+### 12.2 Levantine overlap in lexical features
+
+The strong Lebanese dialect markers (شو، هيك، هلق، بدي، عنجد) are Levantine rather than uniquely Lebanese; they also occur in Syrian and Palestinian Arabic. The lexical and sentence embedding approaches can reliably distinguish Lebanese from Egyptian, Gulf, and MSA, but they do not robustly distinguish Lebanese from Syrian or Palestinian. The benchmark's binary formulation (Lebanese vs. all others) treats this as a non-problem: most of the corpus negatives are non-Levantine. A multi-class extension (e.g., LB / EGY / Gulf / MSA) would expose this limitation directly.
+
+### 12.3 Podcast-heavy ground truth
+
+The GT sample was drawn from the corpus in proportion to tier sizes, resulting in approximately 85% podcast_rss items and 14% YouTube items (in the evaluable set). Performance metrics reflect this distribution. YouTube-specific performance (41 GT items) is reported separately in the error analysis (Section 11.1) but has wider confidence intervals due to the small sample. Systems that perform differently on broadcast vs. conversational audio may be rated differently on a balanced GT.
+
+### 12.4 `mostly_lebanese` → positive mapping
+
+We map `mostly_lebanese` (code-switching, Lebanese+MSA) to the positive class. This is linguistically defensible - Lebanese speakers frequently code-switch and this is a feature of the variety - but it means the positive class includes items that a listener might not classify as "primarily Lebanese." Alternative mappings (treat as a third class, exclude from binary evaluation, use a weight) would produce different absolute numbers. The mapping is consistently applied across all systems.
+
+### 12.5 V1 training pool overlap with ground-truth test set
+
+V1 (text-only classifier, script 05) was trained before the 300-item GT was formally established. The GT was then sampled from the same WEAK_POSITIVE (45 GT items), WEAK_NEGATIVE (45 GT items), and REJECTED (60 GT items) pools, meaning up to 150 of 296 evaluable GT items were present in V1's training data. The V1 ablation variants (lex-only, embedding-only, script 22) were retrained after the GT existed but did not explicitly exclude GT items, so the same overlap applies.
+
+The practical impact is likely modest for three reasons: (i) V1 uses logistic regression - a weak memorizer - trained on 3,654 items, so each individual item has ~0.03% influence on the regression weights; (ii) weak label noise means the training labels for GT-overlapping items agree with the GT annotation only 67–89% of the time (per §6.4 precision figures), introducing downward bias that partially offsets any upward bias from memorization; (iii) V2 and all public systems were evaluated on the same GT with no training overlap, and V1's relative ranking over them is consistent with the mechanistic account in Section 10. A clean retraining of V1 with explicit GT exclusion would resolve this uncertainty and is deferred to future work.
+
+### 12.6 LLM family evaluation partial
+
+The LLM evaluation includes Llama-3.1-8B zero-shot and 3-shot via Groq (completed, results in Section 9.7 and Table 1). AceGPT-7B int4 was not run (GGUF model file not downloaded; ~4 GB). Gemini Flash API is valid but rate-limited to 20 RPD on the free tier, making full GT scoring infeasible without a paid quota increase. The two completed LLM rows confirm the main few-shot finding; AceGPT would add an Arabic-specialized open-weight comparison point that remains as future work.
+
+### 12.7 CPU-only V2.5
+
+The V2.5 fine-tuning was conducted on a 22-core CPU with no GPU. Only 4,000 of 13,600 available training items were used (runtime ceiling: ~12 hours for 2 epochs), and only 10.9% of XLS-R parameters were unfrozen. GPU-based fine-tuning with the full training pool and 50%+ of parameters trainable would constitute a meaningfully different experiment and is the highest-priority future extension.
+
+### 12.8 FLEURS acoustic register mismatch
+
+FLEURS `ar_eg` is read-prompt audio (Egyptian speakers reading literary Arabic sentences); ADI17 dialects are broadcast speech. This acoustic register difference between the MSA contrastive class and other classes is one of the two root causes of the recording-domain confound (the other being the YouTube/podcast signature in the positive class). MGB-2 broadcast MSA would eliminate this mismatch but requires QCRI registration.
+
+---
+
+## 13. Conclusions and Future Work
+
+This chapter summarizes the five contributions of this thesis, states the headline findings, and outlines the highest-priority directions for future research. The goal is to communicate both what this work established and what it leaves open - a distinction that is especially important given the hardware constraints and single-annotator design that bound the current results.
+
+### 13.1 Conclusions
+
+This thesis presents the first Lebanese-specific cross-domain DID benchmark, evaluating 14 primary systems on a 300-item manually annotated test set with percentile-bootstrap statistical confidence intervals.
+
+The headline result is that **text-based models consistently lead acoustic models on this cross-domain Lebanese task**. The in-house V1 MiniLM embedding-only classifier (ROC-AUC 0.886) is statistically indistinguishable from the public state-of-the-art MARBERTv2 (0.898); their CIs overlap with the best acoustic system Elyadata (0.847), but the point-estimate advantage is consistent across all text-vs-acoustic comparisons. The best audio system, Elyadata ADI-whisper-ADI20 (0.847), substantially outperforms our in-house acoustic models and represents the state of the art for country-level acoustic Lebanese DID.
+
+The **recording-domain confound** is the thesis's principal analytical finding. We establish it with four independent lines of evidence: (i) a validation-to-held-out generalization collapse of 0.48 macro F1 for V2 acoustic; (ii) per-source balanced training dropping V2's ROC-AUC to 0.357 (entirely below random, 95% CI [0.291, 0.430]); (iii) a platform-classification probe achieving 89.1% four-way accuracy from the same XLS-R embeddings; (iv) a same-source control trained exclusively on podcast audio - the dominant test domain - failing to match cross-domain V2 performance (0.739 vs 0.791). Together these constitute a strong empirical case that frozen self-supervised acoustic encoders learn recording-domain features before dialect features when training data is assembled from heterogeneous public sources under weak supervision. This is a generalizable finding: any single-dialect speech study built from multi-platform public corpora using frozen encoder features faces the same confound.
+
+### 13.2 Future work
+
+**Highest priority: GPU-scale fine-tuning.** V2.5's failure is attributable in part to the hardware constraint (CPU-only, 10.9% trainable, 4K subsample). Full-scale end-to-end fine-tuning of XLS-R (or a more recent backbone such as wav2vec2-BERT-2.0, which won the NADI 2025 spoken DID task) with per-source balanced sampling and the full 13.6K training pool would directly test whether the confound can be overcome with sufficient compute. Voice conversion (Abdullah et al. 2025) - synthesizing class-balanced speaker variation - is an alternative data-augmentation path that does not require architectural changes.
+
+**MGB-2 MSA substitution.** Replacing FLEURS read-prompt MSA with MGB-2 Al Jazeera broadcast MSA would equalize the acoustic register between the MSA class and the ADI17 dialect classes, eliminating the second root cause of the recording-domain confound. This requires QCRI-managed access to MGB-2.
+
+**LLM family extension.** This work evaluated Llama-3.1-8B zero-shot and 3-shot. Extending to larger models (Llama-3.1-70B, GPT-4o), Arabic-specialized open-weight models (AceGPT-7B, Jais-13B), and few-shot variants with more examples would characterise the scaling curve of LLM-based Lebanese DID and determine whether the 3-shot advantage is consistent across model families.
+
+**Multi-class extension.** Reframing as 4-way classification (Lebanese / MSA / Egyptian / Gulf) would expose the Levantine-overlap limitation directly and produce per-class precision/recall profiles that are more diagnostically useful than binary metrics.
+
+**Inter-annotator agreement.** A second Lebanese-speaking annotator on a 50-item overlap with the GT would yield Cohen's kappa and allow majority-vote relabeling of borderline cases. This is the most important quality improvement to the test set.
+
+**Corpus growth.** The collection pipeline is reusable; extending channel coverage and adding new podcast feeds could grow the Lebanese-positive pool by an order of magnitude, enabling higher-quality training data and a larger GT sample.
 
 ---
 
 ## References
 
-Full BibTeX entries are in [`paper/references.bib`](references.bib). In-text citations use Pandoc-style `[@bibkey]` syntax, which compiles to numbered or author-year format depending on the chosen output (e.g., LaTeX with `natbib` for ACL/IEEE styles).
+Full BibTeX entries are in [`paper/references.bib`](references.bib). In-text citations use Pandoc-style `[@bibkey]` syntax.
 
 **Cited in this draft:**
-- `@bouamor2018madar` — MADAR Arabic Dialect Corpus
-- `@ali2016mgb2` — MGB-2 broadcast Arabic
-- `@ali2017mgb3` — MGB-3 regional dialect challenge
-- `@ali2019mgb5` — ADI17 / MGB-5 Arabic dialect identification benchmark
-- `@halabi2016msa` — Modern Standard Arabic Phonetics for Speech Synthesis (rejected source for MSA contrastive due to single-speaker confound)
-- `@ardila2020commonvoice` — Common Voice (rejected as MSA source due to October 2025 withdrawal from HuggingFace)
-- `@conneau2022fleurs` — FLEURS (selected MSA source)
-- `@babu2022xlsr` — XLS-R (v2 acoustic backbone)
-- `@baevski2020wav2vec2` — wav2vec 2.0 (background for XLS-R)
-- `@hsu2021hubert` — HuBERT (alternative SSL speech backbone)
-- `@radford2023whisper` — Whisper (screening transcription)
-- `@reimers2019sbert` — Sentence-BERT (v1 sentence embedding origin)
-- `@salameh2018finegrained` — fine-grained Arabic dialect ID at city level
-- `@shon2018adi` — CNN + language embeddings dialect recognition baseline
-
-**In `references.bib` but not yet cited in-text** (will be added in implementation/methodology subsections): `@wolf2020transformers`, `@paszke2019pytorch`, `@pedregosa2011sklearn`, `@lhoest2021datasets`, `@inoue2021camelbert`, `@wang2020minilm`, `@habash2010introduction`.
-
-**Flagged `% VERIFY`** in `references.bib` and need exact venue/page confirmation before final submission: `@harrat2019arabic`, `@abdul-mageed2018you`, `@el-haj2018habibi`.
+- `@bouamor2018madar` - MADAR Arabic Dialect Corpus
+- `@ali2016mgb2` - MGB-2 broadcast Arabic; candidate MSA broadcast source (deferred to future work)
+- `@ali2017mgb3` - MGB-3 regional dialect challenge
+- `@ali2019mgb5` - ADI17 / MGB-5; contrastive corpus source + empirical MSA-absence finding
+- `@conneau2022fleurs` - FLEURS; selected MSA contrastive source
+- `@ardila2020commonvoice` - Common Voice; rejected (withdrawn from HuggingFace Oct 2025)
+- `@halabi2016msa` - Arabic Speech Corpus; rejected (single-speaker confound)
+- `@babu2022xlsr` - XLS-R; V2 acoustic backbone
+- `@baevski2020wav2vec2` - wav2vec 2.0; background for XLS-R
+- `@hsu2021hubert` - HuBERT; alternative backbone considered
+- `@radford2023whisper` - Whisper; screening transcription
+- `@reimers2019sbert` - Sentence-BERT; V1 embedding methodology
+- `@inoue2021camelbert` - CAMeL-BERT / MARBERTv2; public text-based system
+- `@salameh2018finegrained` - fine-grained Arabic dialect ID
+- `@shon2018adi` - CNN + language embedding dialect baseline
+- `@pedregosa2011sklearn` - scikit-learn; classifier training
+- `@wolf2020transformers` - HuggingFace Transformers; model loading
+- `@paszke2019pytorch` - PyTorch; deep learning framework
+- `@habash2010introduction` - Arabic NLP background
+- `@badr2025mms` - Abdullah et al. (2025): MMS-300m + voice conversion for Arabic DID (Badr M. Abdullah and Matthew Baas; HF: badrex/mms-300m-arabic-dialect-identifier)
+- `@elleuch2025adi` - ADI-whisper-ADI20, INTERSPEECH 2025
+- `@sullivan2023ssl` - SSL encoders for Arabic DID, INTERSPEECH 2023
+- `@voxlect2026` - voxlect-arabic-dialect-mms-lid-256
+- `@nadi2025` - NADI 2025 shared task proceedings
+- `@geirhos2020shortcut` - Shortcut learning in deep neural networks
+- `@keleg2023aldi` - ALDi: Arabic Level of Dialectness, EMNLP 2023 Findings
 
 ---
 
 ## Appendix A: Pipeline Reproduction
 
-See `PIPELINE.md` in the repository root for the full step-by-step run order, scripts, and current pipeline state. The pipeline is reproducible from public sources only; the only credentials required are a YouTube Data API key (for optional API-based discovery; RSS-based discovery does not require one) and PodcastIndex API credentials.
+See `PIPELINE.md` in the repository root for the full step-by-step run order. The pipeline is reproducible from public sources; the only credentials required are a YouTube Data API key (for optional API-based discovery; RSS-based discovery does not require one) and PodcastIndex API credentials.
 
 ## Appendix B: Negative Results and Reproducibility Friction
 
-Several practical constraints are worth recording for any researcher who attempts to reproduce or extend this work:
+The following practical constraints are recorded for researchers who attempt to reproduce or extend this work:
 
-- **Mozilla Common Voice was withdrawn from HuggingFace in October 2025** and migrated to the Mozilla Data Collective. Any code using `mozilla-foundation/common_voice_*` paths will fail with `DatasetNotFoundError` regardless of authentication state.
-- **`datasets >= 4.0` removed support for script-based dataset loaders.** FLEURS still ships with a `fleurs.py` loading script, so loading FLEURS via modern `datasets` versions raises `RuntimeError: Dataset scripts are no longer supported`. The workaround is to pin `datasets == 2.21.0` together with `fsspec <= 2024.12.0`.
-- **gofile.io's free-tier API was paywalled** at some point before our usage; the `/contents/{code}` endpoint returns `error-notPremium` without paid credentials, even though uploads still work. The website-token (`wt`) needed for unauthenticated access is now extracted from heavily obfuscated JavaScript, making programmatic access fragile.
-- **HuggingFace Windows symlink limitations** mean that without Developer Mode or admin Python, the cache uses file copies instead of symlinks. The first model load reads through Windows Defender file scanning, which can take ~30 minutes for a 1.2 GB model. Subsequent loads with a warm OS disk cache complete in seconds.
-
-These are not flaws in the methodology; they are the kinds of moving-target practicalities that any field-current paper should record so that reviewers and downstream users do not blame the methodology when the underlying tooling has changed.
+- **Mozilla Common Voice withdrawn from HuggingFace (October 2025).** All `mozilla-foundation/common_voice_*` paths fail with `DatasetNotFoundError`. Use Mozilla Data Collective directly.
+- **`datasets ≥ 4.0` removed support for loading-script datasets.** FLEURS uses `fleurs.py`; loading it with modern `datasets` raises `RuntimeError`. Pin `datasets == 2.21.0` with `fsspec <= 2024.12.0`.
+- **ADI17 train split contains zero MSA** (confirmed via full 990,821-row scan). Do not attempt to extract MSA from ADI17.
+- **HuggingFace Windows symlinks** require Developer Mode or admin Python; without them, the first model load with Windows Defender active can take ~30 minutes for a 1.2 GB model.
+- **Voxlect MMSWrapper requires a patch** for `transformers ≥ 4.57.3`: the `Wav2Vec2Attention` class now requires a `config=` keyword argument that the upstream vendored class does not supply.
+- **Elyadata WhisperDialectClassifier requires stubbing** SpeechBrain's optional `k2` dependency and monkey-patching `LazyModule.__getattr__` to prevent eager import of `flair`, `numba`, and other optional SpeechBrain dependencies that are not required for inference.

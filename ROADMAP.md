@@ -104,44 +104,41 @@ Engineering: `scripts/24_eval_public_systems.py` dispatches via a `loader` field
 - **Public-vs-in-house parity on lexical, gap on acoustic.** V1 embedding-only (ours, 0.886) and MARBERTv2 (public, 0.898) have overlapping CIs. Elyadata (public, 0.847) significantly beats V2-frozen (ours, 0.786) on acoustic — confirming the recording-domain confound diagnosis of §12.6.3 / §16: V2 underperforms because it was trained under platform-confounded weak supervision, not because acoustic modelling is inherently broken.
 - **Consolidated 12-system scoreboard** lives in FINDINGS §19.3.
 
-### Day 4 — Arabic LLMs (open-weight + Gemini free tier)
+### Day 4 — Arabic LLMs (open-weight + Gemini free tier) ✅ DONE
 
-**Deliverable:** 2-3 LLM rows in benchmark CSV.
+**Deliverable:** 2 LLM rows in benchmark CSV (Groq Llama 3.1 8B zero-shot + 3-shot).
 
-Tasks:
-- **Open-weight Arabic LLM:** AceGPT-7B int4 via `llama-cpp-python` on the 296 Whisper transcripts. Zero-shot prompt: *"Identify the dialect of this Arabic text: Lebanese, Egyptian, Gulf, MSA, or other."* Plus 3-shot variant.
-- **Gemini AI Studio (free tier):** same prompts via Gemini 2.5 Flash API key (free with rate limits).
-- Optional, time permitting: Jais-13b open weights if it fits CPU memory.
-- Each gets zero-shot + 3-shot rows.
+Results (2026-06-29):
+- `groq_llama31_8b_zeroshot`: ROC-AUC 0.533 (CI95 0.472–0.594), macro F1 0.26
+- `groq_llama31_8b_3shot`: ROC-AUC 0.778 (CI95 0.734–0.819), macro F1 0.64
+- **Finding:** Few-shot prompting yields +0.245 ROC-AUC gain — 3 examples alone match Badr MMS-300m. Zero-shot is near-chance. FINDINGS §20.3.
+- AceGPT not run (GGUF not downloaded). Gemini impractical (20 RPD). Both documented in FINDINGS §20.
 
-### Day 5 — Per-platform breakdown + code-switching analysis
+### Day 5 — Per-platform breakdown + code-switching analysis ✅ DONE 2026-06-29
 
 **Deliverable:** Per-platform tables for every system + code-switching feature column.
 
 Tasks:
-- Per-platform breakdown utility: for each system in the CSV, compute macro F1 and ROC-AUC restricted to (a) podcast subset, (b) youtube subset, (c) ADI17 subset of GT, (d) FLEURS subset.
-- Code-switching density per item: regex over existing transcripts for non-Arabic-script tokens (Latin letters, French/English markers). Compute correlation with per-system error rate.
-- Output: `data/benchmark_per_platform.csv`, `data/code_switching_features.csv`.
+- ✅ Per-platform breakdown: `scripts/26_per_platform_breakdown.py` — macro F1 + ROC-AUC per (system, platform) for podcast_rss and youtube subsets.
+- ✅ Code-switching density: Latin-script token ratio per GT item. Outputs `data/code_switching_features.csv`.
+- ✅ FINDINGS Section 22 appended.
 
-### Day 6 — ALDi + same-source control
+### Day 6 — ALDi + same-source control ✅ DONE 2026-07-04
 
 **Deliverable:** ALDi correlation + V2 same-source control row.
 
 Tasks:
-- **ALDi (Arabic Level of Dialectness)** continuous scoring per GT item using AMR-KELEG/ALDi (public HF model). Correlate ALDi score with per-system accuracy. Adds a sociolinguistic-vs-computational analysis dimension.
-- **Same-source control (P4):** train V2 only on podcast_rss POTENTIAL_LB vs podcast_rss WEAK_NEGATIVE (same domain). Evaluate on podcast subset of GT. Disambiguates "domain shortcut" from "weak intrinsic acoustic signal." One row.
+- ✅ **Same-source control (P4):** `scripts/29_same_source_control.py` — MLP on 1024-d XLS-R, trained only on podcast_rss (2,878 items). podcast_rss GT ROC-AUC: 0.7392 vs V2-frozen 0.7906 — same-source training did NOT recover performance. Confirms XLS-R lacks Lebanese dialect signal regardless of training domain. Adds `v2_same_source` row to benchmark. FINDINGS Section 25 appended.
+- ✅ **ALDi correlation:** `scripts/28_aldi_correlation.py` — AMR-KELEG/ALDi scoring of all GT transcripts + Spearman r vs per-system error. FINDINGS Section 24 appended.
 
-### Day 7 — Failure-case selection + final tables
+### Day 7 — Failure-case selection + final tables ✅ DONE 2026-07-04
 
 **Deliverable:** Failure-case appendix + final benchmark results table + figures.
 
 Tasks:
-- For each system: pick top 10 most-confidently-wrong items (highest |probability − label|). Output: `data/failure_cases.csv` with system_name, item_id, transcript, true_label, predicted_prob, audio_path.
-- Generate paper-ready figures:
-  - ROC curves for all systems (one panel)
-  - Per-platform bar chart (one panel per family)
-  - Confusion matrices (small-multiples grid)
-- Compute pairwise significance: bootstrap CI on (V1 macro F1 − each other system's macro F1).
+- ✅ Failure cases: `scripts/30_failure_cases.py` — top-10 confidently-wrong items per system, with transcript text and audio path. Output: `data/failure_cases.csv` (15 systems × 10 = 150 rows).
+- ✅ Figures (generated 2026-06-29): `scripts/27_generate_figures.py` — ROC curves, confusion matrices (6 systems), per-platform bar. All in `paper/figures/`.
+- ⚠️ Pairwise significance (bootstrap CI on V1 vs each other system) — per-system CIs already in benchmark CSV; pairwise deltas not yet computed. Paper §9.2 has 8 significance statements from CI overlap inspection.
 
 ### Day 8 — Paper rewrite: intro + abstract + related work + contributions
 

@@ -31,6 +31,13 @@ torch
 speechbrain   # Elyadata/ADI-whisper-ADI20 (SpeechBrain Pretrained checkpoint)
 loralib       # Voxlect MMS-LID-256 (lora.Linear used inside MMSWrapper)
 
+# Day-4 LLM-family evaluation (all called via direct REST or local llama.cpp,
+# no provider SDKs — keeps the dep surface tight):
+#   - Gemini 2.5 Flash-Lite via Google AI Studio REST (requests)
+#   - Llama-3.1-8B-Instant via Groq REST (requests; OpenAI-compatible)
+#   - AceGPT-7B-chat int4 GGUF locally:
+llama-cpp-python  # prebuilt wheel from https://abetlen.github.io/llama-cpp-python/whl/cpu
+
 # =========================
 # RSS-based discovery (YouTube, Podcasts)
 # =========================

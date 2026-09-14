@@ -28,6 +28,7 @@ Sample design (300 total, justified in thesis methodology):
     45 WEAK_NEGATIVE   — sanity check on lexical negatives
 """
 
+import argparse
 import csv
 import json
 import random
@@ -54,9 +55,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = PROJECT_ROOT / "data" / "queue.db"
 TRANSCRIPT_DIR = PROJECT_ROOT / "data" / "transcripts"
 SAMPLE_PATH = PROJECT_ROOT / "data" / "annotation_sample.json"
-ANNOTATIONS_PATH = PROJECT_ROOT / "data" / "annotations.csv"
 CACHE_DIR = PROJECT_ROOT / "data" / "annotation_cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Resolved from --output arg in main(); module-level so Flask routes can see it.
+ANNOTATIONS_PATH: Path = PROJECT_ROOT / "data" / "annotations.csv"
 
 STRATA = {
     "WEAK_POSITIVE": 45,
@@ -414,21 +417,38 @@ def api_label():
 
 
 def main():
-    global SAMPLE
+    global SAMPLE, ANNOTATIONS_PATH
+
+    parser = argparse.ArgumentParser(description="Lebanese audio annotation tool")
+    parser.add_argument(
+        "--output", "-o",
+        default=str(PROJECT_ROOT / "data" / "annotations.csv"),
+        help="CSV file to save annotations to (default: data/annotations.csv). "
+             "Use a different path for a second annotator, e.g. --output data/annotations_a2.csv",
+    )
+    parser.add_argument(
+        "--port", "-p", type=int, default=5000,
+        help="Port to run the Flask server on (default: 5000)",
+    )
+    args = parser.parse_args()
+
+    ANNOTATIONS_PATH = Path(args.output)
+    print(f"Saving annotations to: {ANNOTATIONS_PATH}")
+
     SAMPLE = build_sample()
 
     annotated = load_annotations()
     real = sum(1 for a in annotated.values() if a.get("ground_truth") != "skip")
     print(f"Loaded {len(SAMPLE)} items in sample. Already labeled: {real}")
-    print(f"Open http://localhost:5000 in your browser to start annotating.")
+    print(f"Open http://localhost:{args.port} in your browser to start annotating.")
     print(f"Press Ctrl+C to stop. Progress is saved to {ANNOTATIONS_PATH}")
 
     try:
-        webbrowser.open("http://localhost:5000")
+        webbrowser.open(f"http://localhost:{args.port}")
     except Exception:
         pass
 
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=args.port, debug=False)
 
 
 if __name__ == "__main__":

@@ -156,6 +156,15 @@
 }
 
 
+@inproceedings{keleg2023aldi,
+  author    = {Keleg, Amr and Magdy, Walid},
+  title     = {{ALDI: Arabic Level of Dialectness}},
+  booktitle = {Findings of the Association for Computational Linguistics: {EMNLP} 2023},
+  year      = {2023},
+  note      = {HuggingFace: AMR-KELEG/ALDi; used in §11.5 for dialectness correlation analysis. % VERIFY page numbers},
+}
+
+
 % -----------------------------------------------------------------------------
 %  Software / libraries (cite if results depend on a specific implementation)
 % -----------------------------------------------------------------------------
@@ -235,16 +244,65 @@
 
 
 % -----------------------------------------------------------------------------
-%  Recent (2021+) — verify before citing
-%
-% The fork prompt asked for 2-3 recent Lebanese-specific dialect-ID papers.
-% Specific citations are not added here as placeholders to avoid fabrication.
-% Suggested literature search before final submission:
+%  Recent (2023-2026) — systems evaluated in the benchmark
+%  Verified 2026-06-29 against ISCA Archive and arXiv canonical sources.
+%  Only voxlect2026 lacks official page numbers (KDD 2026 not yet published).
+% -----------------------------------------------------------------------------
+
+@inproceedings{elleuch2025adi,
+  author    = {Elleuch, Haroun and Mdhaffar, Salima and Est{\`e}ve, Yannick and Bougares, Fethi},
+  title     = {{ADI-20: {A}rabic {D}ialect {I}dentification dataset and models}},
+  booktitle = {Interspeech 2025},
+  pages     = {2775--2779},
+  year      = {2025},
+  doi       = {10.21437/Interspeech.2025-884},
+  note      = {Elyadata ADI-whisper-ADI20 model evaluated on the Lebanese cross-domain benchmark (Section 9). The only publicly released country-level LEB acoustic DID system in this comparison.},
+}
+
+@inproceedings{badr2025mms,
+  author    = {Abdullah, Badr M. and Baas, Matthew and M{\"{o}}bius, Bernd and Klakow, Dietrich},
+  title     = {{Voice {C}onversion {I}mproves {C}ross-{D}omain {R}obustness for {S}poken {A}rabic {D}ialect {I}dentification}},
+  booktitle = {Interspeech 2025},
+  pages     = {2790--2794},
+  year      = {2025},
+  doi       = {10.21437/Interspeech.2025-1809},
+  note      = {badrex/mms-300m-arabic-dialect-identifier model evaluated in Section 9. Uses voice conversion to augment training data for cross-domain robustness.},
+}
+
+@inproceedings{voxlect2026,
+  author    = {Feng, Tiantian and Huang, Kevin and Xu, Anfeng and Shi, Xuan and Lertpetchpun, Thanathai and Lee, Jihwan and Lee, Yoonjeong and Byrd, Dani and Narayanan, Shrikanth},
+  title     = {{Voxlect: {A} {S}peech {F}oundation {M}odel {B}enchmark for {M}odeling {D}ialects and {R}egional {L}anguages {A}round the {G}lobe}},
+  booktitle = {KDD 2026 Datasets and Benchmarks Track},
+  year      = {2026},
+  doi       = {10.48550/arXiv.2508.01691},
+  note      = {tiantiaf/voxlect-arabic-dialect-mms-lid-256 model evaluated in Section 9. Uses MMS-LID backbone. KDD 2026 preprint; proceedings page numbers pending (conference Aug 9--13, 2026, Jeju, Korea).},
+}
+
+@inproceedings{sullivan2023ssl,
+  author    = {Sullivan, Peter and Elmadany, AbdelRahim and Abdul-Mageed, Muhammad},
+  title     = {{On the {R}obustness of {A}rabic {S}peech {D}ialect {I}dentification}},
+  booktitle = {Interspeech 2023},
+  pages     = {5326--5330},
+  year      = {2023},
+  doi       = {10.21437/Interspeech.2023-1005},
+  note      = {Cited for the finding that frozen SSL encoders fail to generalize across recording domains for Arabic DID. arXiv:2306.03789.},
+}
+
+@article{geirhos2020shortcut,
+  author    = {Geirhos, Robert and Jacobsen, J{\"o}rn-Henrik and Michaelis, Claudio and Zemel, Richard and Brendel, Wieland and Bethge, Matthias and Wichmann, Felix A.},
+  title     = {{Shortcut Learning in Deep Neural Networks}},
+  journal   = {Nature Machine Intelligence},
+  year      = {2020},
+  volume    = {2},
+  pages     = {665--673},
+  note      = {General framework for shortcut learning; the recording-domain confound is a speech-domain instance of this phenomenon},
+}
+
+% Lebanese-specific dialect papers — search before final submission:
 %   - Search Google Scholar for: "Lebanese dialect identification" 2021..2024
 %   - Search ACL Anthology for: WANLP / ArabicNLP proceedings 2022-2024
-%   - Search Interspeech 2022-2024 for: "Levantine Arabic dialect"
-%   - Likely candidate venues: WANLP, ArabicNLP, OSACT, LREC, Interspeech
-% -----------------------------------------------------------------------------
+%   - Search Interspeech 2022-2025 for: "Levantine Arabic dialect"
+%   - NADI 2025 shared task proceedings (Mageed et al. 2025 or similar)
 
 
 % -----------------------------------------------------------------------------
