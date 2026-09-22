@@ -483,7 +483,7 @@ Two consequences follow:
 **The GT does not support:**
 - *Estimating absolute precision/recall in deployment*, because the positive rate in the GT does not match the positive rate a deployed system would encounter.
 - *Generalising absolute macro F1 values* to other evaluation corpora with different class balance.
-- *Inter-annotator agreement claims*, since annotation was performed by a single annotator (Section 12.1).
+- *Fully adjudicated inter-annotator labels*: a second annotator has been completed (binary κ = 0.72, Section 6.2.1) but the 65 disagreement cases have not yet been formally adjudicated; borderline items carry the primary annotator's label.
 
 To summarise: the reported metrics are valid for the comparative ranking of systems on this GT and for the noise audit of the weak labelling pipeline. They should not be interpreted as direct estimates of the expected precision or recall that any system would achieve in an arbitrary Lebanese-Arabic audio deployment.
 
@@ -942,9 +942,9 @@ Lebanese does not appear as a primary focus in recent Arabic DID shared tasks (N
 
 This chapter states the principal limitations of the experimental design, spanning annotation quality, lexical scope, test set composition, training pool contamination, hardware constraints, and evaluation completeness. Acknowledging these limitations is essential for correctly scoping the thesis's conclusions and for guiding future work.
 
-### 12.1 Single annotator
+### 12.1 Annotator agreement
 
-The 300-item ground-truth test was annotated by the thesis author alone. There is no inter-annotator agreement statistic and no formal kappa coefficient. The `mostly_lebanese` category (50 of 300 items, 16.7%) is the highest-ambiguity label, representing code-switching that may be perceived differently by different annotators. A second annotator on this subset and a resulting kappa measurement are deferred to future work.
+The 300-item ground-truth test set was annotated by the thesis author and independently verified by a second native Lebanese-Arabic-speaking annotator (see Section 6.2.1). Binary Cohen's κ = 0.72 (substantial agreement) and 5-way κ = 0.47 (moderate agreement) confirm that the binary ground truth is reliable. The residual limitation is that the 65 disagreement cases (21.7%) have not yet been formally adjudicated — borderline items currently carry the primary annotator's label. The `mostly_lebanese` category (50 of 300 items, 16.7%) accounts for the majority of disagreements, since code-switching is a continuum and two native speakers draw the boundary differently. Adjudication and majority-vote relabeling of these cases is the most important remaining quality improvement to the test set.
 
 ### 12.2 Levantine overlap in lexical features
 
