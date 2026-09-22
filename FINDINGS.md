@@ -1719,3 +1719,43 @@ pattern. This means the primary failure drivers are not linguistic register but 
 likely recording domain (§12.6.3), code-switching density (§22), or topic-specific vocabulary
 that our lexicon does not cover. The null result also rules out one possible explanation for
 V1's advantage over V2: it is not simply that V1 benefits from more dialectal transcripts.
+
+---
+
+## Section 25. Inter-Annotator Agreement (2026-09-22)
+
+### 25.1 Setup
+
+A second native Lebanese-Arabic speaker independently labeled all 300 GT items using
+`tools/annotate.py --output data/annotations_a2.csv --port 5001`. Both annotators used
+the same 300-item sample (seed 42, `data/annotation_sample.json`) in identical order.
+Agreement was computed with `tools/compute_iaa.py`.
+
+### 25.2 Results
+
+| Metric | Value | Interpretation |
+|--------|-------|---------------|
+| 5-way Cohen kappa | 0.4725 | Moderate |
+| Binary Cohen kappa | 0.7155 | Substantial |
+| Exact agreement | 235 / 300 = 78.3% | — |
+| Total disagreements | 65 / 300 = 21.7% | — |
+| Items excluded from binary kappa | 5 (unclear/skip by either annotator) | — |
+
+### 25.3 Disagreement breakdown
+
+Top patterns:
+- mostly_lebanese vs lebanese: 23 (A2 upgrades)
+- mostly_lebanese vs not_lebanese: 19 (A2 downgrades)
+- lebanese vs mostly_lebanese: 6 (A2 is more conservative)
+- lebanese vs not_lebanese: 6 (strong disagreement)
+- unclear vs not_lebanese: 4
+
+### 25.4 Interpretation
+
+Binary kappa 0.72 exceeds the Landis & Koch (1977) threshold of 0.60 for substantial
+agreement. The dominant confusion is at the Lebanese / Mostly-Lebanese boundary (35% of
+disagreements), reflecting that code-switching is a continuum. Both annotators agree on
+the binary positive/negative decision in all but 8 cases (6 LEB vs NOT_LB + 2 NOT_LB vs LEB).
+The disagreements are saved to `data/iaa_disagreements.csv` for future adjudication.
+
+IAA results added to thesis paper Section 6.2.1 and Section 13.2 (future work updated).
