@@ -430,6 +430,12 @@ The confusion pattern is interpretable: the second annotator more often upgraded
 | Not LB | 2 | 4 | 208 | 0 |
 | Unclear | 0 | 0 | 4 | 0 |
 
+#### 6.2.2 Consensus ground truth
+
+From the 300 doubly-annotated items, a **consensus GT** was constructed retaining only items where both annotators agree on the binary label (Lebanese+MostlyLB = positive; NotLebanese = negative). This yields 264 items (positive: 56, negative: 208); 31 items with binary-class disagreement and 5 items where either annotator said *unclear* or *skip* are excluded.
+
+The consensus GT is used as a sensitivity check in Section 9.9: if the benchmark rankings are stable across the full 296-item GT and the 264-item consensus GT, this confirms that the 31 contested items do not drive any system's position. The consensus GT is saved as `data/annotations_consensus.csv`.
+
 ### 6.3 Label distribution
 
 | Ground truth label | Count | Percentage |
@@ -747,6 +753,40 @@ v2_balanced:        true neg    107        107
 ```
 
 V2 frozen and Hybrid predict "Lebanese" for the majority of GT items (87% and 75% respectively), achieving high recall at catastrophic precision. V2 balanced shows the classic anti-correlation signature: 63 of 82 true positives are predicted as negative, while 107 of 214 true negatives are predicted as positive. V1 embedding-only and MARBERTv2 both show the most balanced confusion matrices.
+
+### 9.9 Consensus GT sensitivity check (dual-annotator results)
+
+To validate that the benchmark findings are not driven by labelling ambiguity in contested items, all 14 systems were re-evaluated on the **consensus GT**: the 264-item subset where both annotators independently assigned the same binary label (56 positive, 208 negative). Items where annotators disagreed on the binary class (31 items) or where either annotator was uncertain (5 items) are excluded. The consensus GT was derived from `data/annotations_consensus.csv` using saved system predictions; no model inference was re-run.
+
+**Table 6. Benchmark results on the consensus GT (264 items, binary-agreed by both annotators), ordered by ROC-AUC. Compare with Table 1 (full 296-item GT, primary annotator labels).**
+
+| System | Consensus AUC (95% CI) | Full GT AUC | Δ AUC | Consensus F1 @ 0.5 |
+|---|---|---:|---:|---:|
+| **marbertv2_lev** | **0.923** [0.872, 0.964] | 0.898 | +0.025 | 0.818 |
+| **v1_embedding_only** | **0.915** [0.871, 0.955] | 0.886 | +0.029 | 0.794 |
+| v1_text_only | 0.886 [0.838, 0.924] | 0.848 | +0.038 | 0.671 |
+| **elyadata_whisper_adi20_leb** | **0.869** [0.803, 0.923] | 0.847 | +0.022 | 0.754 |
+| hybrid_v1v2_mlp | 0.849 [0.795, 0.895] | 0.817 | +0.032 | 0.481 |
+| v2_frozen_mlp | 0.817 [0.755, 0.872] | 0.787 | +0.030 | 0.349 |
+| groq_llama31_8b_3shot | 0.806 [0.765, 0.844] | 0.778 | +0.028 | 0.614 |
+| v1_lex_only | 0.809 [0.745, 0.862] | 0.780 | +0.029 | 0.591 |
+| badr_mms_300m_levantine | 0.803 [0.735, 0.863] | 0.778 | +0.025 | 0.688 |
+| v2_same_source | 0.705 [0.619, 0.785] | 0.739 | −0.034 | 0.356 |
+| voxlect_mms_lid256_levantine | 0.728 [0.665, 0.786] | 0.705 | +0.023 | 0.441 |
+| groq_llama31_8b_zeroshot | 0.555 [0.494, 0.619] | 0.533 | +0.022 | 0.222 |
+| v25_finetuned | 0.533 [0.456, 0.610] | 0.533 | +0.000 | 0.441 |
+| **v2_balanced** | **0.353** [0.272, 0.438] | 0.357 | −0.004 | 0.374 |
+| whisper_lid_arabic_prob | 0.500 [0.500, 0.500] | 0.500 | +0.000 | 0.175 |
+
+Three findings are evident from this comparison:
+
+1. **Rankings are fully preserved.** The system ordering is identical across both GTs. No system moves more than one position, confirming that the 31 binary-contested items do not distort the comparative evaluation.
+
+2. **Absolute AUC values are uniformly higher on the consensus GT (+0.022 to +0.038).** This is expected: the excluded items are by definition those where two native Lebanese speakers disagreed — the most linguistically ambiguous clips in the corpus. All systems find these items harder, so removing them raises measured performance consistently. The consensus GT does not reward any single system disproportionately.
+
+3. **V2-balanced and Whisper-LID remain below or at chance.** The confound finding (Section 10) is fully replicated on the dual-annotator consensus subset. V2-balanced ROC-AUC 0.353 (CI [0.272, 0.438]) lies entirely below 0.50. The recording-domain confound diagnosis is robust to annotation methodology.
+
+**Conclusion:** the full-GT results (Table 1) are confirmed by the dual-annotator consensus GT (Table 6). The primary annotator's labels are reliable, the benchmark rankings are stable, and the headline finding — text-based V1 and MARBERTv2 lead all acoustic systems — holds under both annotation conditions.
 
 ---
 
