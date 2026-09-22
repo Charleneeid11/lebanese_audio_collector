@@ -434,7 +434,7 @@ The confusion pattern is interpretable: the second annotator more often upgraded
 
 From the 300 doubly-annotated items, a **consensus GT** was constructed retaining only items where both annotators agree on the binary label (Lebanese+MostlyLB = positive; NotLebanese = negative). This yields 264 items (positive: 56, negative: 208); 31 items with binary-class disagreement and 5 items where either annotator said *unclear* or *skip* are excluded.
 
-The consensus GT is used as a sensitivity check in Section 9.9: if the benchmark rankings are stable across the full 296-item GT and the 264-item consensus GT, this confirms that the 31 contested items do not drive any system's position. The consensus GT is saved as `data/annotations_consensus.csv`.
+The consensus GT is evaluated in Section 9.9 alongside the full 296-item GT (primary annotator labels). Agreement between both evaluations confirms that the 31 contested items do not drive any system's position in the rankings. The consensus GT is saved as `data/annotations_consensus.csv`.
 
 ### 6.3 Label distribution
 
@@ -754,9 +754,9 @@ v2_balanced:        true neg    107        107
 
 V2 frozen and Hybrid predict "Lebanese" for the majority of GT items (87% and 75% respectively), achieving high recall at catastrophic precision. V2 balanced shows the classic anti-correlation signature: 63 of 82 true positives are predicted as negative, while 107 of 214 true negatives are predicted as positive. V1 embedding-only and MARBERTv2 both show the most balanced confusion matrices.
 
-### 9.9 Consensus GT sensitivity check (dual-annotator results)
+### 9.9 Dual-annotator consensus GT results
 
-To validate that the benchmark findings are not driven by labelling ambiguity in contested items, all 14 systems were re-evaluated on the **consensus GT**: the 264-item subset where both annotators independently assigned the same binary label (56 positive, 208 negative). Items where annotators disagreed on the binary class (31 items) or where either annotator was uncertain (5 items) are excluded. The consensus GT was derived from `data/annotations_consensus.csv` using saved system predictions; no model inference was re-run.
+All systems were additionally evaluated on the **consensus GT** — the 264-item subset where both annotators independently assigned the same binary label — to confirm that the benchmark rankings are not driven by the 31 items on which the two annotators disagreed: the 264-item subset where both annotators independently assigned the same binary label (56 positive, 208 negative). Items where annotators disagreed on the binary class (31 items) or where either annotator was uncertain (5 items) are excluded. The consensus GT was derived from `data/annotations_consensus.csv` using saved system predictions; no model inference was re-run.
 
 **Table 6. Benchmark results on the consensus GT (264 items, binary-agreed by both annotators), ordered by ROC-AUC. Compare with Table 1 (full 296-item GT, primary annotator labels).**
 
@@ -1020,7 +1020,7 @@ FLEURS `ar_eg` is read-prompt audio (Egyptian speakers reading literary Arabic s
 
 ## 13. Conclusions and Future Work
 
-This chapter summarizes the five contributions of this thesis, states the headline findings, and outlines the highest-priority directions for future research. The goal is to communicate both what this work established and what it leaves open - a distinction that is especially important given the hardware constraints and single-annotator design that bound the current results.
+This chapter summarizes the five contributions of this thesis, states the headline findings, and outlines the highest-priority directions for future research. The goal is to communicate both what this work established and what it leaves open — a distinction that is especially important given the hardware constraints and the unadjudicated disagreements in the dual-annotator ground truth.
 
 ### 13.1 Conclusions
 
@@ -1040,7 +1040,7 @@ The **recording-domain confound** is the thesis's principal analytical finding. 
 
 **Multi-class extension.** Reframing as 4-way classification (Lebanese / MSA / Egyptian / Gulf) would expose the Levantine-overlap limitation directly and produce per-class precision/recall profiles that are more diagnostically useful than binary metrics.
 
-**Inter-annotator agreement.** Completed: a second Lebanese-speaking native annotator independently labeled all 300 GT items. Binary Cohen's κ = 0.72 (substantial), 5-way κ = 0.47 (moderate). See Section 6.2.1. Future extensions: adjudication of the 65 disagreement cases and majority-vote relabeling of borderline items would further sharpen the ground truth.
+**GT adjudication.** Both annotators labeled all 300 items; binary Cohen's κ = 0.72 (Section 6.2.1). The 65 items where annotators disagree on the binary class currently carry the primary annotator's label. Formal adjudication (a third annotator or arbitration session) and majority-vote relabeling of these cases would further sharpen the ground truth and is the most impactful remaining quality improvement to the test set.
 
 **Corpus growth.** The collection pipeline is reusable; extending channel coverage and adding new podcast feeds could grow the Lebanese-positive pool by an order of magnitude, enabling higher-quality training data and a larger GT sample.
 
